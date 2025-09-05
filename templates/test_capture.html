@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Network Capture - Anomaly Detection</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .packet-log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            padding: 15px;
+        }
+        
+        .packet-entry {
+            border-bottom: 1px solid #e9ecef;
+            padding: 8px 0;
+            margin: 0;
+        }
+        
+        .packet-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .protocol-tcp { color: #007bff; }
+        .protocol-udp { color: #28a745; }
+        .protocol-icmp { color: #ffc107; }
+        .protocol-unknown { color: #6c757d; }
+        
+        .anomaly-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .anomaly-normal { background-color: #28a745; }
+        .anomaly-detected { background-color: #dc3545; }
+        
+        .stats-card {
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .capture-controls {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .ml-status-card {
+            border-left: 4px solid #007bff;
+        }
+        
+        .btn-capture-start {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            border: none;
+            color: white;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-capture-start:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .btn-capture-stop {
+            background: linear-gradient(45deg, #dc3545, #fd7e14);
+            border: none;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .live-indicator {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .packet-details {
+            display: none;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 5px;
+            font-size: 0.8rem;
+        }
+        
+        .packet-entry:hover .packet-details {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-shield-alt"></i> Network Anomaly Detection
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">Dashboard</a>
+                <a class="nav-link" href="/baseline">Baseline Collection</a>
+                <a class="nav-link active" href="/test-capture">Live Capture</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Page Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1><i class="fas fa-broadcast-tower"></i> Live Network Packet Capture</h1>
+                <p class="text-muted">Real-time network traffic capture and analysis with ML anomaly detection</p>
+            </div>
+        </div>
+
+        <!-- ML Status Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card ml-status-card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-brain"></i> ML System Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Mode:</strong>
+                                <span class="badge bg-info ms-2" id="ml-mode">{{ ml_status.mode }}</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Trained:</strong>
+                                <span class="badge {% if ml_status.is_trained %}bg-success{% else %}bg-warning{% endif %} ms-2" id="ml-trained">
+                                    {% if ml_status.is_trained %}Yes{% else %}No{% endif %}
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Baseline Samples:</strong>
+                                <span class="ms-2" id="ml-samples">{{ ml_status.baseline_samples_collected }} / {{ ml_status.min_baseline_samples }}</span>
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Progress:</strong>
+                                <span class="ms-2" id="ml-progress">{{ ml_status.progress.percentage }}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capture Controls -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="capture-controls">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h4><i class="fas fa-play-circle"></i> Capture Controls</h4>
+                            <p class="mb-0">Start capturing live network traffic and analyze with ML</p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button class="btn btn-capture-start btn-lg me-2" id="startCaptureBtn" onclick="startCapture()">
+                                <i class="fas fa-play"></i> Start Capture
+                            </button>
+                            <button class="btn btn-capture-stop btn-lg" id="stopCaptureBtn" onclick="stopCapture()" disabled>
+                                <i class="fas fa-stop"></i> Stop Capture
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Capture Settings -->
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <label for="captureCount" class="form-label">Packet Count (0 = continuous):</label>
+                            <input type="number" class="form-control" id="captureCount" value="0" min="0" max="10000">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="captureTimeout" class="form-label">Timeout (seconds):</label>
+                            <input type="number" class="form-control" id="captureTimeout" value="60" min="10" max="3600">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="testMode" class="form-label">Test Mode:</label>
+                            <select class="form-control" id="testMode">
+                                <option value="false">Live Capture</option>
+                                <option value="true">Test (10 packets)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card text-center">
+                    <div class="card-body">
+                        <h2 class="text-primary" id="totalPackets">0</h2>
+                        <p class="mb-0">Total Packets</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card text-center">
+                    <div class="card-body">
+                        <h2 class="text-success" id="packetsPerSecond">0</h2>
+                        <p class="mb-0">Packets/sec</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card text-center">
+                    <div class="card-body">
+                        <h2 class="text-warning" id="anomaliesDetected">0</h2>
+                        <p class="mb-0">Anomalies</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card text-center">
+                    <div class="card-body">
+                        <h2 class="text-info" id="captureDuration">0s</h2>
+                        <p class="mb-0">Duration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capture Status and Log -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-list"></i> Live Packet Stream</h5>
+                        <div>
+                            <span class="badge bg-secondary me-2" id="captureStatus">Stopped</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearLog()">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="packet-log" id="packetLog">
+                            <div class="text-muted text-center p-4">
+                                <i class="fas fa-satellite-dish fa-3x mb-3"></i><br>
+                                Click "Start Capture" to begin monitoring network traffic
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <!-- Protocol Distribution -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6><i class="fas fa-chart-pie"></i> Protocol Distribution</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="protocolStats">
+                            <small class="text-muted">No data yet</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Anomalies -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Recent Anomalies</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="anomaliesList">
+                            <small class="text-muted">No anomalies detected</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let captureInterval = null;
+        let statusInterval = null;
+        let startTime = null;
+        let isCapturing = false;
+        
+        function startCapture() {
+            const testMode = document.getElementById('testMode').value === 'true';
+            const count = testMode ? 10 : parseInt(document.getElementById('captureCount').value) || 0;
+            const timeout = parseInt(document.getElementById('captureTimeout').value) || 60;
+            
+            const url = testMode ? '/api/capture/test' : '/api/capture/start';
+            const payload = { count: count, timeout: timeout };
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showError('Error starting capture: ' + data.error);
+                    return;
+                }
+                
+                // Update UI
+                document.getElementById('startCaptureBtn').disabled = true;
+                document.getElementById('stopCaptureBtn').disabled = false;
+                document.getElementById('captureStatus').textContent = 'Running';
+                document.getElementById('captureStatus').className = 'badge bg-success live-indicator';
+                
+                isCapturing = true;
+                startTime = new Date();
+                
+                // Clear log
+                clearLog();
+                addLogEntry('info', 'Capture started...', '');
+                
+                if (testMode) {
+                    // For test mode, show results immediately
+                    displayTestResults(data);
+                } else {
+                    // Start polling for live updates
+                    startPolling();
+                }
+            })
+            .catch(error => {
+                showError('Network error: ' + error.message);
+            });
+        }
+        
+        function stopCapture() {
+            fetch('/api/capture/stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Update UI
+                document.getElementById('startCaptureBtn').disabled = false;
+                document.getElementById('stopCaptureBtn').disabled = true;
+                document.getElementById('captureStatus').textContent = 'Stopped';
+                document.getElementById('captureStatus').className = 'badge bg-secondary';
+                
+                isCapturing = false;
+                stopPolling();
+                
+                addLogEntry('info', 'Capture stopped', '');
+                
+                if (data.final_stats) {
+                    displayFinalStats(data.final_stats);
+                }
+            })
+            .catch(error => {
+                showError('Error stopping capture: ' + error.message);
+            });
+        }
+        
+        function startPolling() {
+            // Update stats every 2 seconds
+            statusInterval = setInterval(updateStatus, 2000);
+            
+            // Update packets every 1 second
+            captureInterval = setInterval(updatePackets, 1000);
+        }
+        
+        function stopPolling() {
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+            if (captureInterval) {
+                clearInterval(captureInterval);
+                captureInterval = null;
+            }
+        }
+        
+        function updateStatus() {
+            fetch('/api/capture/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateStatistics(data.stats);
+                    updateDuration();
+                })
+                .catch(error => {
+                    console.error('Error updating status:', error);
+                });
+        }
+        
+        function updatePackets() {
+            fetch('/api/capture/packets?max=10')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.packets && data.packets.length > 0) {
+                        data.packets.forEach(packet => {
+                            displayPacket(packet);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating packets:', error);
+                });
+        }
+        
+        function updateStatistics(stats) {
+            document.getElementById('totalPackets').textContent = stats.total_packets || 0;
+            document.getElementById('anomaliesDetected').textContent = stats.anomalies_detected || 0;
+            
+            // Calculate packets per second
+            if (startTime && stats.total_packets) {
+                const elapsed = (new Date() - startTime) / 1000;
+                const pps = Math.round(stats.total_packets / elapsed);
+                document.getElementById('packetsPerSecond').textContent = pps;
+            }
+            
+            // Update protocol distribution
+            updateProtocolStats(stats.packets_per_protocol || {});
+        }
+        
+        function updateDuration() {
+            if (startTime) {
+                const elapsed = Math.floor((new Date() - startTime) / 1000);
+                document.getElementById('captureDuration').textContent = elapsed + 's';
+            }
+        }
+        
+        function updateProtocolStats(protocols) {
+            const container = document.getElementById('protocolStats');
+            
+            if (Object.keys(protocols).length === 0) {
+                container.innerHTML = '<small class="text-muted">No data yet</small>';
+                return;
+            }
+            
+            let html = '';
+            for (const [protocol, count] of Object.entries(protocols)) {
+                const percentage = Math.round((count / Object.values(protocols).reduce((a, b) => a + b, 0)) * 100);
+                html += `
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="protocol-${protocol.toLowerCase()}">${protocol}</span>
+                        <span>${count} (${percentage}%)</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+        
+        function displayPacket(packet) {
+            const timestamp = new Date(packet.timestamp).toLocaleTimeString();
+            const protocol = packet.protocol || 'Unknown';
+            const protocolClass = `protocol-${protocol.toLowerCase()}`;
+            
+            let details = `${packet.src_ip}:${packet.src_port} → ${packet.dst_ip}:${packet.dst_port}`;
+            if (packet.flags) {
+                details += ` [${packet.flags}]`;
+            }
+            
+            const isAnomaly = packet.anomaly_detected || false;
+            const anomalyClass = isAnomaly ? 'anomaly-detected' : 'anomaly-normal';
+            
+            addLogEntry('packet', 
+                `<span class="anomaly-indicator ${anomalyClass}"></span>` +
+                `<span class="${protocolClass}">${protocol}</span> ` +
+                `${details} (${packet.length} bytes)`,
+                timestamp
+            );
+        }
+        
+        function displayTestResults(data) {
+            addLogEntry('success', `Test completed: ${data.packets_captured} packets captured`, '');
+            
+            if (data.packets) {
+                data.packets.forEach(packet => {
+                    displayPacket(packet);
+                });
+            }
+            
+            if (data.stats) {
+                updateStatistics(data.stats);
+            }
+            
+            // Reset UI after test
+            setTimeout(() => {
+                document.getElementById('startCaptureBtn').disabled = false;
+                document.getElementById('stopCaptureBtn').disabled = true;
+                document.getElementById('captureStatus').textContent = 'Stopped';
+                document.getElementById('captureStatus').className = 'badge bg-secondary';
+                isCapturing = false;
+            }, 1000);
+        }
+        
+        function displayFinalStats(stats) {
+            addLogEntry('info', 
+                `Final stats: ${stats.total_packets} packets, ${stats.anomalies_detected} anomalies`,
+                ''
+            );
+        }
+        
+        function addLogEntry(type, message, timestamp) {
+            const log = document.getElementById('packetLog');
+            const entry = document.createElement('div');
+            entry.className = 'packet-entry';
+            
+            let icon = '';
+            let colorClass = '';
+            
+            switch (type) {
+                case 'info':
+                    icon = '<i class="fas fa-info-circle text-info"></i>';
+                    break;
+                case 'success':
+                    icon = '<i class="fas fa-check-circle text-success"></i>';
+                    break;
+                case 'error':
+                    icon = '<i class="fas fa-exclamation-circle text-danger"></i>';
+                    break;
+                case 'packet':
+                    icon = '<i class="fas fa-network-wired text-primary"></i>';
+                    break;
+            }
+            
+            entry.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <span>${icon} ${message}</span>
+                    <small class="text-muted">${timestamp}</small>
+                </div>
+            `;
+            
+            log.appendChild(entry);
+            
+            // Auto-scroll to bottom
+            log.scrollTop = log.scrollHeight;
+            
+            // Limit to 100 entries
+            while (log.children.length > 100) {
+                log.removeChild(log.firstChild);
+            }
+        }
+        
+        function clearLog() {
+            const log = document.getElementById('packetLog');
+            log.innerHTML = '';
+        }
+        
+        function showError(message) {
+            addLogEntry('error', message, new Date().toLocaleTimeString());
+        }
+        
+        // Update ML status periodically
+        function updateMLStatus() {
+            fetch('/api/ml/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('ml-mode').textContent = data.mode;
+                    document.getElementById('ml-trained').textContent = data.is_trained ? 'Yes' : 'No';
+                    document.getElementById('ml-trained').className = `badge ${data.is_trained ? 'bg-success' : 'bg-warning'} ms-2`;
+                    document.getElementById('ml-samples').textContent = `${data.baseline_samples_collected} / ${data.min_baseline_samples}`;
+                    document.getElementById('ml-progress').textContent = `${data.progress.percentage}%`;
+                })
+                .catch(error => {
+                    console.error('Error updating ML status:', error);
+                });
+        }
+        
+        // Update ML status every 10 seconds
+        setInterval(updateMLStatus, 10000);
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            updateMLStatus();
+        });
+    </script>
+</body>
+</html>

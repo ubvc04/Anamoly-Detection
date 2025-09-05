@@ -3,20 +3,20 @@ Web Interface Module
 Flask web application for network anomaly detection dashboard
 """
 
-import logging
 import json
+import logging
+import psutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
-from werkzeug.security import check_password_hash, generate_password_hash
+
 import plotly.graph_objs as go
 import plotly.utils
+from flask import Flask, render_template, request, jsonify, flash
+
 from config.config import config
-from database import DatabaseManager
-from network_capture import PacketCapture, NetworkInterfaceManager
-from detector import StreamingDetector
-import psutil
+from database import db_manager
+from detector import detection_engine
+from network_capture import packet_capture
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -32,10 +32,8 @@ app.jinja_env.globals.update({
 })
 
 # Global instances - initialize immediately
-from database import db_manager
-from network_capture import packet_capture
-from detector import detection_engine
 interface_manager = None
+
 
 def safe_get_stats(obj, method_name, default=None):
     """Safely get statistics from an object with fallback"""
@@ -45,6 +43,7 @@ def safe_get_stats(obj, method_name, default=None):
         return default or {}
     except Exception:
         return default or {}
+
 
 def safe_call_method(obj, method_name, *args, **kwargs):
     """Safely call a method on an object with fallback"""
@@ -61,9 +60,12 @@ def dashboard():
     """Main dashboard"""
     try:
         # Get system statistics with safe fallbacks
-        capture_stats = packet_capture.get_statistics() if packet_capture else {'packets': 0, 'bytes': 0, 'rate': 0}
-        detection_stats = detection_engine.get_statistics() if detection_engine else {'anomalies': 0, 'alerts': 0}
-        db_stats = db_manager.get_statistics() if db_manager else {'total_packets': 0, 'total_anomalies': 0}
+        capture_stats = (packet_capture.get_statistics() if packet_capture
+                        else {'packets': 0, 'bytes': 0, 'rate': 0})
+        detection_stats = (detection_engine.get_statistics() if detection_engine
+                          else {'anomalies': 0, 'alerts': 0})
+        db_stats = (db_manager.get_statistics() if db_manager
+                   else {'total_packets': 0, 'total_anomalies': 0})
         
         # Mock model info since ml_model_manager is not available
         model_info = {
@@ -73,7 +75,8 @@ def dashboard():
         }
         
         # Get recent alerts with fallback
-        recent_alerts = detection_engine.get_recent_alerts(hours=24) if detection_engine else []
+        recent_alerts = (detection_engine.get_recent_alerts(hours=24)
+                        if detection_engine else [])
         
         # Get system metrics
         system_metrics = get_system_metrics()
@@ -83,7 +86,7 @@ def dashboard():
                              detection_stats=detection_stats,
                              db_stats=db_stats,
                              model_info=model_info,
-                             recent_alerts=recent_alerts[:10],  # Show latest 10
+                             recent_alerts=recent_alerts[:10],
                              system_metrics=system_metrics)
         
     except Exception as e:
@@ -96,18 +99,21 @@ def network_traffic():
     """Network traffic analysis page"""
     try:
         # Get recent flows for analysis with safe fallback
-        recent_flows = safe_call_method(db_manager, 'get_recent_flows', hours=24, limit=100) or []
+        recent_flows = (safe_call_method(db_manager, 'get_recent_flows',
+                                       hours=24, limit=100) or [])
         
         # Create traffic visualizations
         traffic_charts = create_traffic_charts(recent_flows)
         
         # Get interface information with safe fallback
-        interfaces = safe_call_method(packet_capture, 'get_interface_list') or []
+        interfaces = (safe_call_method(packet_capture, 'get_interface_list')
+                     or [])
         
         # Create traffic stats with fallback
         traffic_stats = safe_get_stats(packet_capture, 'get_statistics', {
-            'total_packets': len(recent_flows), 
-            'active_flows': len([f for f in recent_flows if f.get('status') == 'active']),
+            'total_packets': len(recent_flows),
+            'active_flows': len([f for f in recent_flows
+                                if f.get('status') == 'active']),
             'bytes_transferred': sum(f.get('bytes', 0) for f in recent_flows)
         })
         
@@ -122,24 +128,26 @@ def network_traffic():
         paginated_flows = recent_flows[start_idx:end_idx]
         
         return render_template('network_traffic.html',
-                             flows=paginated_flows,
-                             charts=traffic_charts,
-                             interfaces=interfaces,
-                             traffic_stats=traffic_stats,
-                             current_page=current_page,
-                             total_pages=total_pages,
-                             per_page=per_page)
+                               flows=paginated_flows,
+                               charts=traffic_charts,
+                               interfaces=interfaces,
+                               traffic_stats=traffic_stats,
+                               current_page=current_page,
+                               total_pages=total_pages,
+                               per_page=per_page)
         
     except Exception as e:
         logging.error(f"Error loading network traffic page: {e}")
         flash(f'Error loading network traffic: {str(e)}', 'error')
-        return render_template('network_traffic.html', 
-                             flows=[], 
-                             charts={}, 
-                             interfaces=[],
-                             traffic_stats={'total_packets': 0, 'active_flows': 0, 'bytes_transferred': 0},
-                             current_page=1,
-                             total_pages=1,
+        return render_template('network_traffic.html',
+                               flows=[],
+                               charts={},
+                               interfaces=[],
+                               traffic_stats={'total_packets': 0,
+                                            'active_flows': 0,
+                                            'bytes_transferred': 0},
+                               current_page=1,
+                               total_pages=1,
                              per_page=20)
 
 @app.route('/anomalies')
@@ -418,6 +426,36 @@ def settings():
         return render_template('settings.html',
                              config=fallback_config,
                              interfaces=[])
+
+
+@app.route('/baseline')
+def baseline_collection():
+    """Baseline Collection Management page"""
+    try:
+        from ml_model import ml_model_manager
+        
+        # Get current ML system status
+        status = ml_model_manager.get_system_status()
+        
+        return render_template('baseline.html', 
+                             ml_status=status)
+        
+    except Exception as e:
+        logging.error(f"Error loading baseline page: {e}")
+        flash(f'Error loading baseline page: {str(e)}', 'error')
+        
+        # Return with fallback status
+        fallback_status = {
+            'mode': 'unknown',
+            'is_trained': False,
+            'baseline_samples_collected': 0,
+            'min_baseline_samples': 1000,
+            'progress': {'percentage': 0}
+        }
+        
+        return render_template('baseline.html',
+                             ml_status=fallback_status)
+
 
 # API Endpoints
 
@@ -1053,111 +1091,340 @@ def api_flow_details(flow_id):
         logging.error(f"Error getting flow details: {e}")
         return jsonify({'error': 'Failed to get flow details'}), 500
 
-@app.route('/api/control/capture', methods=['POST'])
-def api_control_capture():
-    """Control packet capture"""
+
+# ========================= BASELINE COLLECTION & DETECTION API =========================
+
+@app.route('/api/ml/status')
+def get_ml_status():
+    """Get the current ML system status"""
     try:
-        data = request.get_json() or {}
-        action = data.get('action', 'start')
+        from ml_model import ml_model_manager
+        status = ml_model_manager.get_system_status()
+        return jsonify(status)
+    except Exception as e:
+        logging.error(f"Error getting ML status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ml/baseline/add', methods=['POST'])
+def add_baseline_sample():
+    """Add a baseline sample to the collection"""
+    try:
+        from ml_model import ml_model_manager
+        data = request.get_json()
         
-        if action == 'start':
-            # Placeholder for starting capture
-            result = {
-                'status': 'started',
-                'message': 'Packet capture started successfully',
-                'started_at': datetime.now().isoformat()
-            }
-        elif action == 'stop':
-            # Placeholder for stopping capture
-            result = {
-                'status': 'stopped',
-                'message': 'Packet capture stopped successfully',
-                'stopped_at': datetime.now().isoformat()
-            }
-        else:
-            return jsonify({'error': 'Invalid action'}), 400
+        if not data or 'features' not in data:
+            return jsonify({'error': 'Features required'}), 400
+        
+        features = data['features']
+        result = ml_model_manager.add_baseline_sample(features)
         
         return jsonify(result)
     except Exception as e:
-        logging.error(f"Error controlling capture: {e}")
-        return jsonify({'error': 'Failed to control capture'}), 500
+        logging.error(f"Error adding baseline sample: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/control/detection', methods=['POST'])
-def api_control_detection():
-    """Control anomaly detection"""
+
+@app.route('/api/ml/baseline/train', methods=['POST'])
+def train_baseline_model():
+    """Train the baseline model and switch to detection mode"""
     try:
-        data = request.get_json() or {}
-        action = data.get('action', 'start')
+        from ml_model import ml_model_manager
+        result = ml_model_manager.train_baseline_model()
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error training baseline model: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ml/predict', methods=['POST'])
+def predict_anomaly():
+    """Predict if the given features represent an anomaly"""
+    try:
+        from ml_model import ml_model_manager
+        data = request.get_json()
         
-        if action == 'start':
-            # Placeholder for starting detection
-            result = {
-                'status': 'started',
-                'message': 'Anomaly detection started successfully',
-                'started_at': datetime.now().isoformat()
-            }
-        elif action == 'stop':
-            # Placeholder for stopping detection
-            result = {
-                'status': 'stopped',
-                'message': 'Anomaly detection stopped successfully',
-                'stopped_at': datetime.now().isoformat()
-            }
-        else:
-            return jsonify({'error': 'Invalid action'}), 400
+        if not data or 'features' not in data:
+            return jsonify({'error': 'Features required'}), 400
+        
+        features = data['features']
+        result = ml_model_manager.predict_anomaly(features)
         
         return jsonify(result)
     except Exception as e:
-        logging.error(f"Error controlling detection: {e}")
-        return jsonify({'error': 'Failed to control detection'}), 500
+        logging.error(f"Error predicting anomaly: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/train-model', methods=['POST'])
-def api_train_model():
-    """Train machine learning model"""
+
+@app.route('/api/ml/reset', methods=['POST'])
+def reset_ml_system():
+    """Reset the ML system to baseline collection mode"""
     try:
-        # Placeholder for model training
-        training_result = {
-            'status': 'started',
-            'training_id': f"train_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'message': 'Model training started successfully',
-            'estimated_duration': '5-10 minutes',
-            'started_at': datetime.now().isoformat()
+        from ml_model import ml_model_manager
+        result = ml_model_manager.reset_system()
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Error resetting ML system: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ml/baseline/progress')
+def get_baseline_progress():
+    """Get baseline collection progress"""
+    try:
+        from ml_model import ml_model_manager
+        progress = ml_model_manager.get_baseline_progress()
+        return jsonify(progress)
+    except Exception as e:
+        logging.error(f"Error getting baseline progress: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ml/baseline/auto-collect', methods=['POST'])
+def auto_collect_baseline():
+    """Auto-collect baseline samples from recent network traffic"""
+    try:
+        from ml_model import ml_model_manager
+        data = request.get_json()
+        num_samples = data.get('num_samples', 100) if data else 100
+        
+        # Get recent traffic data for baseline collection
+        traffic_data = safe_call_method(db_manager, 'get_recent_traffic', num_samples)
+        
+        if not traffic_data:
+            return jsonify({'error': 'No traffic data available for baseline collection'}), 400
+        
+        results = []
+        for traffic in traffic_data:
+            # Convert traffic data to feature vector
+            features = [
+                traffic.get('packet_size', 64),
+                traffic.get('protocol', 6),  # TCP default
+                traffic.get('port', 80),
+                traffic.get('flags', 0),
+                traffic.get('ttl', 64)
+            ]
+            
+            result = ml_model_manager.add_baseline_sample(features)
+            results.append(result)
+        
+        # Get final status
+        status = ml_model_manager.get_system_status()
+        
+        return jsonify({
+            'samples_added': len(results),
+            'status': status,
+            'results': results[-1] if results else {}  # Return last result
+        })
+        
+    except Exception as e:
+        logging.error(f"Error auto-collecting baseline: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ========================= ENHANCED ML INTEGRATION =========================
+
+@app.route('/api/ml/auto-train', methods=['POST'])
+def auto_train_system():
+    """Automatically collect baseline samples and train if ready"""
+    try:
+        from ml_model import ml_model_manager
+        
+        # Check current status
+        status = ml_model_manager.get_system_status()
+        
+        if status['mode'] != 'baseline_collection':
+            return jsonify({'error': 'System is not in baseline collection mode'}), 400
+        
+        # Auto-collect samples if needed
+        if status['baseline_samples_collected'] < status['min_baseline_samples']:
+            samples_needed = status['min_baseline_samples'] - status['baseline_samples_collected']
+            auto_collect_result = auto_collect_baseline()
+            
+            if auto_collect_result[1] != 200:  # Error occurred
+                return auto_collect_result
+        
+        # Check if ready for training
+        updated_status = ml_model_manager.get_system_status()
+        progress = updated_status.get('progress', {})
+        
+        if progress.get('ready_for_training', False):
+            train_result = ml_model_manager.train_baseline_model()
+            return jsonify(train_result)
+        else:
+            return jsonify({
+                'message': 'More samples needed for training',
+                'status': updated_status,
+                'samples_needed': progress.get('samples_needed', 0)
+            })
+            
+    except Exception as e:
+        logging.error(f"Error in auto-train system: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ========================= PACKET CAPTURE INTEGRATION =========================
+
+@app.route('/api/capture/test', methods=['POST'])
+def test_packet_capture():
+    """Test packet capture functionality"""
+    try:
+        from packet_capture_service import get_packet_capture_service
+        from ml_model import ml_model_manager
+        
+        # Get capture service with ML integration
+        capture_service = get_packet_capture_service(ml_model_manager)
+        
+        # Get test parameters
+        data = request.get_json() or {}
+        count = data.get('count', 10)
+        timeout = data.get('timeout', 30)
+        
+        # Run test capture
+        result = capture_service.test_capture(count=count, timeout=timeout)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logging.error(f"Error testing packet capture: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/capture/start', methods=['POST'])
+def start_live_capture():
+    """Start live packet capture with ML analysis"""
+    try:
+        from packet_capture_service import get_packet_capture_service
+        from ml_model import ml_model_manager
+        
+        # Get capture service with ML integration
+        capture_service = get_packet_capture_service(ml_model_manager)
+        
+        # Get capture parameters
+        data = request.get_json() or {}
+        count = data.get('count', None)  # None for continuous
+        timeout = data.get('timeout', None)  # None for continuous
+        
+        # Start capture
+        success = capture_service.start_capture(count=count, timeout=timeout)
+        
+        if success:
+            return jsonify({
+                'status': 'started',
+                'message': 'Live packet capture started',
+                'capture_info': capture_service.get_status()
+            })
+        else:
+            return jsonify({'error': 'Failed to start capture'}), 500
+            
+    except Exception as e:
+        logging.error(f"Error starting live capture: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/capture/stop', methods=['POST'])
+def stop_live_capture():
+    """Stop live packet capture"""
+    try:
+        from packet_capture_service import get_packet_capture_service
+        
+        capture_service = get_packet_capture_service()
+        success = capture_service.stop_capture()
+        
+        if success:
+            return jsonify({
+                'status': 'stopped',
+                'message': 'Live packet capture stopped',
+                'final_stats': capture_service.get_status()
+            })
+        else:
+            return jsonify({'error': 'No capture was running'}), 400
+            
+    except Exception as e:
+        logging.error(f"Error stopping live capture: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/capture/status')
+def get_capture_status():
+    """Get current capture status and statistics"""
+    try:
+        from packet_capture_service import get_packet_capture_service
+        
+        capture_service = get_packet_capture_service()
+        status = capture_service.get_status()
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        logging.error(f"Error getting capture status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/capture/packets')
+def get_recent_packets():
+    """Get recently captured packets"""
+    try:
+        from packet_capture_service import get_packet_capture_service
+        
+        capture_service = get_packet_capture_service()
+        max_packets = request.args.get('max', 20, type=int)
+        
+        packets = capture_service.get_recent_packets(max_packets=max_packets)
+        
+        return jsonify({
+            'packets': packets,
+            'count': len(packets),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logging.error(f"Error getting recent packets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/test-capture')
+def test_capture_page():
+    """Test capture page for debugging"""
+    try:
+        from ml_model import ml_model_manager
+        
+        # Get current ML system status
+        ml_status = ml_model_manager.get_system_status()
+        
+        return render_template('test_capture.html', 
+                             ml_status=ml_status)
+        
+    except Exception as e:
+        logging.error(f"Error loading test capture page: {e}")
+        flash(f'Error loading test capture page: {str(e)}', 'error')
+        
+        # Return with fallback status
+        fallback_status = {
+            'mode': 'unknown',
+            'is_trained': False,
+            'baseline_samples_collected': 0,
+            'min_baseline_samples': 1000,
+            'progress': {'percentage': 0}
         }
         
-        return jsonify(training_result)
-    except Exception as e:
-        logging.error(f"Error starting training: {e}")
-        return jsonify({'error': 'Failed to start training'}), 500
+        return render_template('test_capture.html',
+                             ml_status=fallback_status)
 
-@app.route('/api/alert/<alert_id>/false-positive', methods=['POST'])
-def api_alert_false_positive(alert_id):
-    """Mark alert as false positive"""
-    try:
-        # Placeholder for false positive marking
-        result = {
-            'alert_id': alert_id,
-            'status': 'marked_false_positive',
-            'message': 'Alert marked as false positive',
-            'updated_at': datetime.now().isoformat()
-        }
-        
-        return jsonify(result)
-    except Exception as e:
-        logging.error(f"Error marking false positive: {e}")
-        return jsonify({'error': 'Failed to mark false positive'}), 500
 
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('404.html'), 404
 
+
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('500.html'), 500
 
+
 # Setup logging for Flask
 if not app.debug:
-    import logging
     from logging.handlers import RotatingFileHandler
     
     log_dir = Path("logs")

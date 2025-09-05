@@ -1,0 +1,100 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "network-anomaly-detection"
+version = "1.0.0"
+description = "Network Anomaly Detection System"
+authors = [
+    {name = "Network Security Team"}
+]
+dependencies = [
+    "flask>=3.0.0",
+    "scapy>=2.6.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+    "tensorflow>=2.15.0",
+    "psutil>=5.9.0",
+    "sqlalchemy>=2.0.0",
+    "jinja2>=3.1.0",
+    "wtforms>=3.1.0",
+    "plotly>=5.17.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+    "netifaces>=0.11.0",
+    "joblib>=1.3.0",
+    "pyyaml>=6.0.0",
+    "pywin32>=306",
+    "cryptography>=41.0.0",
+    "bcrypt>=4.1.0",
+    "requests>=2.31.0",
+    "python-dateutil>=2.8.0",
+    "pytz>=2023.3"
+]
+requires-python = ">=3.8"
+
+[tool.black]
+line-length = 120
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 120
+known_first_party = ["network_capture", "detector", "database", "config"]
+
+[tool.flake8]
+max-line-length = 120
+ignore = [
+    "E501",  # line too long
+    "E265",  # block comment should start with '#'
+    "E302",  # expected 2 blank lines
+    "E305",  # expected 2 blank lines after class or function definition
+    "E402",  # module level import not at top of file
+    "W503",  # line break before binary operator
+    "E126",  # continuation line over-indented for hanging indent
+    "E127",  # continuation line over-indented for visual indent
+    "E128",  # continuation line under-indented for visual indent
+    "E124",  # closing bracket does not match visual indentation
+    "F401",  # imported but unused (temporarily disabled)
+    "F841",  # local variable is assigned to but never used
+]
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "env",
+    ".env",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".tox",
+    ".pytest_cache",
+    "node_modules",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = false
+warn_unused_configs = true
+ignore_missing_imports = true

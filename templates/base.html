@@ -56,6 +56,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'baseline_collection' %}active{% endif %}" 
+                           href="{{ url_for('baseline_collection') }}">
+                            <i class="fas fa-download"></i> Baseline
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}" 
                            href="{{ url_for('settings') }}">
                             <i class="fas fa-cog"></i> Settings

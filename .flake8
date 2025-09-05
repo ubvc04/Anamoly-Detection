@@ -1,0 +1,41 @@
+[flake8]
+max-line-length = 120
+ignore = 
+    E501,  # line too long
+    E265,  # block comment should start with '# '
+    E302,  # expected 2 blank lines
+    E305,  # expected 2 blank lines after class or function definition
+    E402,  # module level import not at top of file
+    W503,  # line break before binary operator
+    E126,  # continuation line over-indented for hanging indent
+    E127,  # continuation line over-indented for visual indent
+    E128,  # continuation line under-indented for visual indent
+    E124,  # closing bracket does not match visual indentation
+    E711,  # comparison to None should be 'if cond is None:'
+    E712,  # comparison to True should be 'if cond is True:' or 'if cond:'
+    E714,  # test for object identity should be 'is not'
+    E721,  # do not compare types, use 'isinstance()'
+    F401,  # imported but unused
+    F841,  # local variable is assigned to but never used
+    E203,  # whitespace before ':'
+    W293,  # blank line contains whitespace
+    W291,  # trailing whitespace
+    W392,  # blank line at end of file
+    E701,  # multiple statements on one line
+    E702   # multiple statements on one line (semicolon)
+
+exclude = 
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    env,
+    .env,
+    build,
+    dist,
+    *.egg-info,
+    .tox,
+    .pytest_cache,
+    node_modules,
+    migrations,
+    tests

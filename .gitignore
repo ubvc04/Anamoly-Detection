@@ -1,38 +1,59 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.pdb
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 *.egg-info/
+.installed.cfg
 *.egg
-*.manifest
-*.spec
+MANIFEST
 
-# Virtual environment
-.env/
-.venv/
+# Virtual Environment
 venv/
-ENV/
 env/
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
+ENV/
+.venv/
 
 # IDE
 .vscode/
 .idea/
-
-# Logs
-*.log
-logs/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Models & data
-*.pkl
-*.h5
+# Project specific
+logs/
+*.log
 *.db
-data/
+*.sqlite
+*.sqlite3
+network_anomaly.db
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

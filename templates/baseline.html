@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+{% set title = "Baseline Collection" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Baseline Collection & Detection Mode</h1>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary" id="refreshStatus">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" id="resetSystem">
+                        <i class="fas fa-undo"></i> Reset System
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> System Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="display-6 mb-2">
+                                    <span id="modeIcon" class="badge badge-lg">
+                                        {% if ml_status.mode == 'baseline_collection' %}
+                                            <i class="fas fa-download text-warning"></i> Collecting
+                                        {% elif ml_status.mode == 'detection' %}
+                                            <i class="fas fa-shield-alt text-success"></i> Detecting
+                                        {% else %}
+                                            <i class="fas fa-question text-secondary"></i> Unknown
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                <h6 id="modeText">{{ ml_status.mode|title|replace('_', ' ') }}</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="display-6 mb-2">
+                                    {% if ml_status.is_trained %}
+                                        <i class="fas fa-check-circle text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times-circle text-danger"></i>
+                                    {% endif %}
+                                </div>
+                                <h6>Model Status</h6>
+                                <p id="trainedStatus" class="mb-0">
+                                    {{ 'Trained' if ml_status.is_trained else 'Untrained' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="display-6 mb-2" id="samplesCollected">
+                                    {{ ml_status.baseline_samples_collected or 0 }}
+                                </div>
+                                <h6>Samples Collected</h6>
+                                <p class="mb-0">
+                                    of <span id="samplesRequired">{{ ml_status.min_baseline_samples or 1000 }}</span> required
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center">
+                                <div class="display-6 mb-2" id="progressPercentage">
+                                    {{ "%.1f"|format(ml_status.progress.percentage or 0) }}%
+                                </div>
+                                <h6>Progress</h6>
+                                <div class="progress mt-2">
+                                    <div id="progressBar" class="progress-bar" role="progressbar" 
+                                         style="width: {{ ml_status.progress.percentage or 0 }}%"
+                                         aria-valuenow="{{ ml_status.progress.percentage or 0 }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Baseline Collection Controls -->
+    <div class="row mb-4" id="baselineControls" {% if ml_status.mode == 'detection' %}style="display: none;"{% endif %}>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-download"></i> Baseline Collection
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Collect normal network traffic samples to establish a baseline for anomaly detection.
+                    </p>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-primary btn-block" id="autoCollectBtn">
+                            <i class="fas fa-magic"></i> Auto-Collect from Recent Traffic
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-info btn-block" id="liveCaptureBtnBaseline">
+                            <i class="fas fa-broadcast-tower"></i> Start Live Capture & Analysis
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="numSamples" class="form-label">Number of samples to collect:</label>
+                        <input type="number" class="form-control" id="numSamples" value="100" min="1" max="1000">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-success btn-block" id="trainModelBtn" disabled>
+                            <i class="fas fa-brain"></i> Train Model & Switch to Detection
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> The system needs {{ ml_status.min_baseline_samples or 1000 }} samples 
+                        of normal traffic to train the anomaly detection model.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line"></i> Collection Progress
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="progressDetails">
+                        {% if ml_status.progress %}
+                            <div class="mb-3">
+                                <strong>Samples Collected:</strong> 
+                                <span id="currentSamples">{{ ml_status.progress.samples_collected or 0 }}</span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Samples Needed:</strong> 
+                                <span id="samplesNeeded">{{ ml_status.progress.samples_needed or ml_status.min_baseline_samples }}</span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Ready for Training:</strong> 
+                                <span id="readyStatus" class="badge {{ 'badge-success' if ml_status.progress.ready_for_training else 'badge-warning' }}">
+                                    {{ 'Yes' if ml_status.progress.ready_for_training else 'No' }}
+                                </span>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div id="lastUpdate" class="text-muted small">
+                        {% if ml_status.last_updated %}
+                            Last updated: {{ ml_status.last_updated }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detection Mode Controls -->
+    <div class="row mb-4" id="detectionControls" {% if ml_status.mode != 'detection' %}style="display: none;"{% endif %}>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-shield-alt"></i> Detection Mode
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>System Ready!</strong> The model is trained and actively detecting anomalies.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <strong>Model Information:</strong>
+                        <ul class="list-unstyled mt-2">
+                            <li><i class="fas fa-calendar"></i> Trained: <span id="trainedDate">{{ ml_status.trained_at or 'Unknown' }}</span></li>
+                            <li><i class="fas fa-database"></i> Training samples: <span id="trainingSamples">{{ ml_status.training_samples or 'Unknown' }}</span></li>
+                            <li><i class="fas fa-cog"></i> Model type: <span id="modelType">{{ ml_status.model_type or 'IsolationForest' }}</span></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-primary btn-block" id="testPredictionBtn">
+                            <i class="fas fa-test-tube"></i> Test Prediction
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-tools"></i> Model Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">
+                        Manage the trained anomaly detection model.
+                    </p>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-warning btn-block" id="retrainBtn">
+                            <i class="fas fa-redo"></i> Retrain Model
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Warning:</strong> Retraining will reset the system to baseline collection mode.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list"></i> Activity Log
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="activityLog" class="border rounded p-3" style="height: 300px; overflow-y: auto; background-color: #f8f9fa;">
+                        <div class="text-muted">Activity log will appear here...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Prediction Modal -->
+<div class="modal fade" id="testPredictionModal" tabindex="-1" role="dialog" aria-labelledby="testPredictionModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="testPredictionModalLabel">Test Anomaly Prediction</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="testPredictionForm">
+                    <div class="form-group">
+                        <label for="testFeatures">Feature Vector (comma-separated values):</label>
+                        <input type="text" class="form-control" id="testFeatures" 
+                               placeholder="64, 6, 80, 2, 64" 
+                               value="64, 6, 80, 2, 64">
+                        <small class="form-text text-muted">
+                            Enter 5 values: packet_size, protocol, port, flags, ttl
+                        </small>
+                    </div>
+                </form>
+                <div id="predictionResult" class="mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="runPredictionBtn">Run Prediction</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    let activityLog = $('#activityLog');
+    
+    function logActivity(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const alertClass = type === 'error' ? 'alert-danger' : 
+                          type === 'success' ? 'alert-success' : 
+                          type === 'warning' ? 'alert-warning' : 'alert-info';
+        
+        const logEntry = `
+            <div class="alert ${alertClass} py-2 mb-2">
+                <small><strong>${timestamp}</strong> - ${message}</small>
+            </div>
+        `;
+        
+        activityLog.prepend(logEntry);
+        
+        // Keep only last 20 entries
+        activityLog.children().slice(20).remove();
+    }
+    
+    function updateSystemStatus() {
+        $.get('/api/ml/status')
+            .done(function(data) {
+                // Update mode
+                let modeIcon = $('#modeIcon');
+                let modeText = $('#modeText');
+                
+                if (data.mode === 'baseline_collection') {
+                    modeIcon.html('<i class="fas fa-download text-warning"></i> Collecting');
+                    modeText.text('Baseline Collection');
+                    $('#baselineControls').show();
+                    $('#detectionControls').hide();
+                } else if (data.mode === 'detection') {
+                    modeIcon.html('<i class="fas fa-shield-alt text-success"></i> Detecting');
+                    modeText.text('Detection Mode');
+                    $('#baselineControls').hide();
+                    $('#detectionControls').show();
+                }
+                
+                // Update trained status
+                $('#trainedStatus').text(data.is_trained ? 'Trained' : 'Untrained');
+                
+                // Update samples
+                $('#samplesCollected').text(data.baseline_samples_collected || 0);
+                $('#samplesRequired').text(data.min_baseline_samples || 1000);
+                
+                // Update progress
+                if (data.progress) {
+                    $('#progressPercentage').text(data.progress.percentage.toFixed(1) + '%');
+                    $('#progressBar').css('width', data.progress.percentage + '%');
+                    $('#progressBar').attr('aria-valuenow', data.progress.percentage);
+                    
+                    $('#currentSamples').text(data.progress.samples_collected || 0);
+                    $('#samplesNeeded').text(data.progress.samples_needed || 0);
+                    
+                    const readyBadge = $('#readyStatus');
+                    if (data.progress.ready_for_training) {
+                        readyBadge.removeClass('badge-warning').addClass('badge-success').text('Yes');
+                        $('#trainModelBtn').prop('disabled', false);
+                    } else {
+                        readyBadge.removeClass('badge-success').addClass('badge-warning').text('No');
+                        $('#trainModelBtn').prop('disabled', true);
+                    }
+                }
+                
+                // Update detection mode info
+                if (data.trained_at) {
+                    $('#trainedDate').text(new Date(data.trained_at).toLocaleString());
+                }
+                if (data.training_samples) {
+                    $('#trainingSamples').text(data.training_samples);
+                }
+                if (data.model_type) {
+                    $('#modelType').text(data.model_type);
+                }
+                
+                // Update last update time
+                if (data.last_updated) {
+                    $('#lastUpdate').text('Last updated: ' + new Date(data.last_updated).toLocaleString());
+                }
+            })
+            .fail(function(xhr) {
+                logActivity('Failed to get system status: ' + xhr.responseJSON?.error, 'error');
+            });
+    }
+    
+    // Auto-collect baseline samples
+    $('#autoCollectBtn').click(function() {
+        const numSamples = $('#numSamples').val() || 100;
+        const btn = $(this);
+        
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Collecting...');
+        
+        $.post('/api/ml/baseline/auto-collect', {
+            num_samples: parseInt(numSamples)
+        })
+        .done(function(data) {
+            logActivity(`Successfully collected ${data.samples_added} baseline samples`, 'success');
+            updateSystemStatus();
+        })
+        .fail(function(xhr) {
+            logActivity('Failed to collect baseline samples: ' + xhr.responseJSON?.error, 'error');
+        })
+        .always(function() {
+            btn.prop('disabled', false).html('<i class="fas fa-magic"></i> Auto-Collect from Recent Traffic');
+        });
+    });
+    
+    // Start live capture and analysis
+    $('#liveCaptureBtnBaseline').click(function() {
+        // Open the test capture page in a new tab/window
+        window.open('/test-capture', '_blank');
+    });
+    
+    // Train model
+    $('#trainModelBtn').click(function() {
+        const btn = $(this);
+        
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Training...');
+        
+        $.post('/api/ml/baseline/train')
+        .done(function(data) {
+            if (data.success) {
+                logActivity(`Model trained successfully with ${data.training_samples} samples`, 'success');
+                updateSystemStatus();
+            } else {
+                logActivity('Training failed: ' + data.error, 'error');
+            }
+        })
+        .fail(function(xhr) {
+            logActivity('Training failed: ' + xhr.responseJSON?.error, 'error');
+        })
+        .always(function() {
+            btn.prop('disabled', false).html('<i class="fas fa-brain"></i> Train Model & Switch to Detection');
+        });
+    });
+    
+    // Reset system
+    $('#resetSystem').click(function() {
+        if (confirm('Are you sure you want to reset the system? This will delete the trained model and return to baseline collection mode.')) {
+            const btn = $(this);
+            
+            btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Resetting...');
+            
+            $.post('/api/ml/reset')
+            .done(function(data) {
+                if (data.success) {
+                    logActivity('System reset successfully', 'success');
+                    updateSystemStatus();
+                } else {
+                    logActivity('Reset failed: ' + data.error, 'error');
+                }
+            })
+            .fail(function(xhr) {
+                logActivity('Reset failed: ' + xhr.responseJSON?.error, 'error');
+            })
+            .always(function() {
+                btn.prop('disabled', false).html('<i class="fas fa-undo"></i> Reset System');
+            });
+        }
+    });
+    
+    // Retrain model
+    $('#retrainBtn').click(function() {
+        $('#resetSystem').click(); // Same as reset
+    });
+    
+    // Test prediction
+    $('#testPredictionBtn').click(function() {
+        $('#testPredictionModal').modal('show');
+    });
+    
+    $('#runPredictionBtn').click(function() {
+        const featuresStr = $('#testFeatures').val();
+        const features = featuresStr.split(',').map(f => parseFloat(f.trim()));
+        
+        if (features.length !== 5 || features.some(isNaN)) {
+            $('#predictionResult').html('<div class="alert alert-danger">Please enter exactly 5 numeric values separated by commas.</div>');
+            return;
+        }
+        
+        const btn = $(this);
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Predicting...');
+        
+        $.post('/api/ml/predict', {
+            features: features
+        })
+        .done(function(data) {
+            if (data.error) {
+                $('#predictionResult').html('<div class="alert alert-danger">' + data.error + '</div>');
+            } else {
+                const alertClass = data.is_anomaly ? 'alert-danger' : 'alert-success';
+                const result = data.is_anomaly ? 'ANOMALY DETECTED' : 'Normal Traffic';
+                
+                $('#predictionResult').html(`
+                    <div class="alert ${alertClass}">
+                        <h6>${result}</h6>
+                        <p>Anomaly Score: ${data.anomaly_score.toFixed(4)}</p>
+                        <p>Confidence: ${data.confidence.toFixed(4)}</p>
+                        <p>Timestamp: ${new Date(data.timestamp).toLocaleString()}</p>
+                    </div>
+                `);
+            }
+        })
+        .fail(function(xhr) {
+            $('#predictionResult').html('<div class="alert alert-danger">Prediction failed: ' + xhr.responseJSON?.error + '</div>');
+        })
+        .always(function() {
+            btn.prop('disabled', false).html('Run Prediction');
+        });
+    });
+    
+    // Refresh status
+    $('#refreshStatus').click(function() {
+        updateSystemStatus();
+        logActivity('Status refreshed', 'info');
+    });
+    
+    // Auto-refresh every 30 seconds
+    setInterval(updateSystemStatus, 30000);
+    
+    // Initial load
+    logActivity('Baseline Collection page loaded', 'info');
+    updateSystemStatus();
+});
+</script>
+{% endblock %}

@@ -3,18 +3,20 @@ Database Management Module
 Handles all database operations for the network anomaly detection system
 """
 
-import sqlite3
 import json
 import logging
+import sqlite3
 import threading
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
-import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, Text, Boolean
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import (Boolean, Column, DateTime, Float, Integer, String,
+                        Text, create_engine)
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from config.config import config
 
 # Create base class for SQLAlchemy models
@@ -390,7 +392,7 @@ class DatabaseManager:
             logging.error(f"Error getting recent anomalies: {e}")
             return []
     
-    def get_training_data(self, days: int = 7) -> pd.DataFrame:
+    def get_training_data(self, days: int = 7) -> Dict[str, Any]:
         """
         Get training data for ML models
         
@@ -398,7 +400,7 @@ class DatabaseManager:
             days: Number of days of data to retrieve
             
         Returns:
-            Pandas DataFrame with training data
+            Dictionary with training data
         """
         try:
             with self.get_session() as session:
@@ -410,26 +412,111 @@ class DatabaseManager:
                 ).all()
                 
                 if not features:
-                    return pd.DataFrame()
+                    return {'features': [], 'labels': [], 'feature_names': []}
                 
-                # Convert to DataFrame
+                # Convert to dictionary format
                 data = []
+                feature_names = []
                 for feature in features:
                     feature_dict = json.loads(feature.features)
-                    feature_names = json.loads(feature.feature_names)
+                    names = json.loads(feature.feature_names)
+                    if not feature_names:
+                        feature_names = names
                     
                     row = {name: feature_dict.get(str(i), 0) 
-                          for i, name in enumerate(feature_names)}
-                    row['timestamp'] = feature.timestamp
+                          for i, name in enumerate(names)}
+                    row['timestamp'] = feature.timestamp.isoformat()
                     row['flow_id'] = feature.flow_id
                     data.append(row)
                 
-                return pd.DataFrame(data)
+                return {
+                    'features': data,
+                    'feature_names': feature_names,
+                    'count': len(data)
+                }
                 
         except Exception as e:
             logging.error(f"Error getting training data: {e}")
-            return pd.DataFrame()
+            return {'features': [], 'labels': [], 'feature_names': []}
     
+    def get_recent_traffic(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """
+        Get recent network traffic data for baseline collection
+        
+        Args:
+            limit: Maximum number of records to retrieve
+            
+        Returns:
+            List of traffic data dictionaries
+        """
+        try:
+            with self.get_session() as session:
+                # Get recent packets
+                packets = session.query(NetworkPacket).order_by(
+                    NetworkPacket.timestamp.desc()
+                ).limit(limit).all()
+                
+                traffic_data = []
+                for packet in packets:
+                    # Convert packet to feature-like format
+                    traffic_dict = {
+                        'packet_size': packet.packet_size or 64,
+                        'protocol': self._protocol_to_number(packet.protocol),
+                        'port': packet.dest_port or 80,
+                        'flags': self._tcp_flags_to_number(packet.tcp_flags),
+                        'ttl': 64,  # Default TTL
+                        'timestamp': packet.timestamp.isoformat(),
+                        'source_ip': packet.source_ip,
+                        'dest_ip': packet.dest_ip,
+                        'flow_id': packet.flow_id
+                    }
+                    traffic_data.append(traffic_dict)
+                
+                return traffic_data
+                
+        except Exception as e:
+            logging.error(f"Error getting recent traffic: {e}")
+            return []
+    
+    def _protocol_to_number(self, protocol: str) -> int:
+        """Convert protocol string to number"""
+        protocol_map = {
+            'TCP': 6,
+            'UDP': 17,
+            'ICMP': 1,
+            'HTTP': 6,
+            'HTTPS': 6,
+            'FTP': 6,
+            'SSH': 6,
+            'TELNET': 6,
+            'SMTP': 6,
+            'DNS': 17
+        }
+        return protocol_map.get(protocol, 6)  # Default to TCP
+    
+    def _tcp_flags_to_number(self, flags: str) -> int:
+        """Convert TCP flags string to number"""
+        if not flags:
+            return 0
+        
+        flag_values = {
+            'FIN': 1,
+            'SYN': 2,
+            'RST': 4,
+            'PSH': 8,
+            'ACK': 16,
+            'URG': 32,
+            'ECE': 64,
+            'CWR': 128
+        }
+        
+        total = 0
+        for flag in flags.split(','):
+            flag = flag.strip().upper()
+            total += flag_values.get(flag, 0)
+        
+        return total
+
     def cleanup_old_data(self) -> None:
         """Clean up old data based on retention settings"""
         try:

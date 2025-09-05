@@ -3,24 +3,39 @@ Network Traffic Capture Module
 Handles real-time network packet capture using Scapy with Npcap on Windows
 """
 
+import hashlib
 import logging
+import queue
 import threading
 import time
-import queue
-import hashlib
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass
-import netifaces
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
 import psutil
-from scapy.all import *
-from scapy.layers.inet import IP, TCP, UDP, ICMP
-from scapy.layers.inet6 import IPv6
-from scapy.layers.l2 import Ether
-from scapy.layers.dns import DNS
-from scapy.layers.http import HTTP
+try:
+    import netifaces
+except ImportError:
+    netifaces = None
+
+try:
+    from scapy.all import sniff, get_if_list, get_if_hwaddr
+    from scapy.layers.dns import DNS
+    from scapy.layers.http import HTTP
+    from scapy.layers.inet import IP, ICMP, TCP, UDP
+    from scapy.layers.inet6 import IPv6
+    from scapy.layers.l2 import Ether
+    from scapy.packet import Raw
+except ImportError:
+    # Handle missing scapy gracefully
+    sniff = None
+    get_if_list = None
+    get_if_hwaddr = None
+    DNS = HTTP = IP = ICMP = TCP = UDP = IPv6 = Ether = Raw = None
+
 from config.config import config
 from database import db_manager
+
 
 @dataclass
 class PacketInfo:
@@ -39,6 +54,7 @@ class PacketInfo:
     ttl: Optional[int]
     window_size: Optional[int]
     raw_data: Dict[str, Any]
+
 
 class NetworkInterfaceManager:
     """Manages network interfaces for packet capture"""
