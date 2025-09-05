@@ -1,0 +1,161 @@
+# Network Anomaly Detection System Configuration
+app:
+  name: "Network Anomaly Detector"
+  version: "1.0.0"
+  debug: false
+  host: "0.0.0.0"
+  port: 5000
+  secret_key: "your-secret-key-change-this-in-production"
+
+network:
+  # Network interfaces to monitor (empty list means all interfaces)
+  interfaces: []
+  
+  # Packet capture settings
+  capture:
+    filter: ""  # BPF filter (empty means capture all)
+    snaplen: 65535  # Maximum bytes per packet
+    promisc: true  # Promiscuous mode
+    timeout: 1000  # Timeout in milliseconds
+    buffer_size: 8192  # Buffer size for packet capture
+    
+  # Traffic analysis settings
+  analysis:
+    window_size: 300  # Time window in seconds for flow analysis
+    flow_timeout: 60  # Flow timeout in seconds
+    min_packets: 5  # Minimum packets to consider a flow
+
+machine_learning:
+  # Model settings
+  models:
+    isolation_forest:
+      contamination: 0.1
+      n_estimators: 100
+      random_state: 42
+    
+    one_class_svm:
+      kernel: 'rbf'
+      gamma: 'scale'
+      nu: 0.1
+    
+    autoencoder:
+      encoding_dim: 32
+      epochs: 100
+      batch_size: 32
+      validation_split: 0.2
+  
+  # Training settings
+  training:
+    retrain_interval: 86400  # Retrain every 24 hours
+    min_samples: 1000  # Minimum samples for training
+    test_size: 0.2  # Test split ratio
+    
+  # Feature settings
+  features:
+    normalize: true
+    feature_selection: true
+    n_features: 50  # Number of top features to select
+
+detection:
+  # Anomaly detection thresholds
+  thresholds:
+    isolation_forest: -0.1
+    one_class_svm: -0.1
+    autoencoder: 0.5
+    ensemble: 0.6  # Ensemble voting threshold
+  
+  # Alert settings
+  alerts:
+    enabled: true
+    min_severity: "medium"  # low, medium, high, critical
+    cooldown: 300  # Cooldown period in seconds
+    
+  # Real-time processing
+  realtime:
+    batch_size: 100  # Process packets in batches
+    processing_interval: 5  # Process every N seconds
+
+database:
+  # SQLite database settings
+  type: "sqlite"
+  path: "data/network_anomaly.db"
+  
+  # Data retention settings
+  retention:
+    raw_packets: 7  # Days to keep raw packet data
+    features: 30  # Days to keep feature data
+    anomalies: 90  # Days to keep anomaly records
+    models: 30  # Days to keep old model versions
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log files
+  files:
+    main: "logs/main.log"
+    capture: "logs/capture.log"
+    ml: "logs/ml.log"
+    web: "logs/web.log"
+    service: "logs/service.log"
+  
+  # Log rotation
+  rotation:
+    max_size: 10485760  # 10MB
+    backup_count: 5
+
+service:
+  # Windows service settings
+  name: "NetworkAnomalyDetector"
+  display_name: "Network Anomaly Detection Service"
+  description: "Real-time network anomaly detection and monitoring service"
+  
+  # Service behavior
+  auto_start: true
+  restart_on_failure: true
+  restart_delay: 30  # Seconds to wait before restart
+
+security:
+  # Web interface authentication
+  auth:
+    enabled: true
+    username: "admin"
+    password: "change_this_password"  # Change in production
+    session_timeout: 3600  # 1 hour
+  
+  # Data encryption
+  encryption:
+    enabled: false
+    key_file: "config/encryption.key"
+
+notifications:
+  # Email notifications
+  email:
+    enabled: false
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    from_address: ""
+    to_addresses: []
+  
+  # Other notification methods can be added here
+  webhook:
+    enabled: false
+    url: ""
+    
+performance:
+  # Memory management
+  memory:
+    max_usage: 1073741824  # 1GB in bytes
+    cleanup_interval: 3600  # Cleanup every hour
+  
+  # CPU usage
+  cpu:
+    max_usage: 80  # Maximum CPU usage percentage
+    
+  # Threading
+  threads:
+    capture: 2
+    processing: 4
+    web: 2

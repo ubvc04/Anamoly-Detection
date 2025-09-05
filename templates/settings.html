@@ -1,0 +1,666 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Network Anomaly Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-cog"></i> System Settings</h1>
+        <p class="text-muted">Configure system parameters and preferences</p>
+    </div>
+</div>
+
+<!-- Settings Tabs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="settingsTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="network-tab" data-bs-toggle="tab" 
+                                data-bs-target="#network" type="button" role="tab">
+                            <i class="fas fa-network-wired"></i> Network
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="detection-tab" data-bs-toggle="tab" 
+                                data-bs-target="#detection" type="button" role="tab">
+                            <i class="fas fa-search"></i> Detection
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ml-tab" data-bs-toggle="tab" 
+                                data-bs-target="#ml" type="button" role="tab">
+                            <i class="fas fa-brain"></i> Machine Learning
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="alerts-tab" data-bs-toggle="tab" 
+                                data-bs-target="#alerts" type="button" role="tab">
+                            <i class="fas fa-bell"></i> Alerts
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="system-tab" data-bs-toggle="tab" 
+                                data-bs-target="#system" type="button" role="tab">
+                            <i class="fas fa-server"></i> System
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <div class="card-body">
+                <div class="tab-content" id="settingsTabContent">
+                    <!-- Network Settings -->
+                    <div class="tab-pane fade show active" id="network" role="tabpanel">
+                        <form id="network-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Packet Capture</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Network Interfaces</label>
+                                        <div class="form-check">
+                                            {% for interface in available_interfaces %}
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" 
+                                                       name="interfaces" value="{{ interface.name }}"
+                                                       {% if interface.name in config.network.interfaces %}checked{% endif %}>
+                                                <label class="form-check-label">
+                                                    {{ interface.name }} - {{ interface.description }}
+                                                    <small class="text-muted">({{ interface.ip }})</small>
+                                                </label>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Capture Filter</label>
+                                        <input type="text" class="form-control" name="capture_filter" 
+                                               value="{{ config.network.capture_filter }}"
+                                               placeholder="e.g., not port 22">
+                                        <small class="form-text text-muted">BPF filter expression</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Buffer Size (MB)</label>
+                                        <input type="number" class="form-control" name="buffer_size" 
+                                               value="{{ config.network.buffer_size }}" min="1" max="1000">
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Flow Processing</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Flow Timeout (seconds)</label>
+                                        <input type="number" class="form-control" name="flow_timeout" 
+                                               value="{{ config.network.flow_timeout }}" min="1" max="3600">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Max Concurrent Flows</label>
+                                        <input type="number" class="form-control" name="max_flows" 
+                                               value="{{ config.network.max_flows }}" min="100" max="100000">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Packet Sampling Rate</label>
+                                        <input type="number" class="form-control" name="sampling_rate" 
+                                               value="{{ config.network.sampling_rate }}" min="1" max="100">
+                                        <small class="form-text text-muted">Capture every Nth packet</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Network Settings
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Detection Settings -->
+                    <div class="tab-pane fade" id="detection" role="tabpanel">
+                        <form id="detection-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Anomaly Detection</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Detection Threshold</label>
+                                        <input type="range" class="form-range" name="threshold" 
+                                               min="0.1" max="1.0" step="0.05" 
+                                               value="{{ config.detection.threshold }}"
+                                               oninput="this.nextElementSibling.value = this.value">
+                                        <output>{{ config.detection.threshold }}</output>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Sensitivity Level</label>
+                                        <select class="form-select" name="sensitivity">
+                                            <option value="low" {% if config.detection.sensitivity == 'low' %}selected{% endif %}>Low</option>
+                                            <option value="medium" {% if config.detection.sensitivity == 'medium' %}selected{% endif %}>Medium</option>
+                                            <option value="high" {% if config.detection.sensitivity == 'high' %}selected{% endif %}>High</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Ensemble Weights</label>
+                                        <div class="row">
+                                            <div class="col-4">
+                                                <label class="form-label small">Isolation Forest</label>
+                                                <input type="number" class="form-control form-control-sm" 
+                                                       name="weight_if" value="{{ config.detection.weights.isolation_forest }}" 
+                                                       step="0.1" min="0" max="1">
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">One-Class SVM</label>
+                                                <input type="number" class="form-control form-control-sm" 
+                                                       name="weight_svm" value="{{ config.detection.weights.one_class_svm }}" 
+                                                       step="0.1" min="0" max="1">
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small">Autoencoder</label>
+                                                <input type="number" class="form-control form-control-sm" 
+                                                       name="weight_ae" value="{{ config.detection.weights.autoencoder }}" 
+                                                       step="0.1" min="0" max="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Processing</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Processing Interval (seconds)</label>
+                                        <input type="number" class="form-control" name="processing_interval" 
+                                               value="{{ config.detection.processing_interval }}" min="1" max="60">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Batch Size</label>
+                                        <input type="number" class="form-control" name="batch_size" 
+                                               value="{{ config.detection.batch_size }}" min="10" max="10000">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="realtime_processing"
+                                                   {% if config.detection.realtime_processing %}checked{% endif %}>
+                                            <label class="form-check-label">Real-time Processing</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="auto_learning"
+                                                   {% if config.detection.auto_learning %}checked{% endif %}>
+                                            <label class="form-check-label">Adaptive Learning</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Detection Settings
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- ML Settings -->
+                    <div class="tab-pane fade" id="ml" role="tabpanel">
+                        <form id="ml-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Model Training</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Training Data Size</label>
+                                        <input type="number" class="form-control" name="training_size" 
+                                               value="{{ config.ml.training_size }}" min="1000" max="1000000">
+                                        <small class="form-text text-muted">Number of samples for training</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Validation Split</label>
+                                        <input type="number" class="form-control" name="validation_split" 
+                                               value="{{ config.ml.validation_split }}" step="0.05" min="0.1" max="0.5">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Contamination Rate</label>
+                                        <input type="number" class="form-control" name="contamination" 
+                                               value="{{ config.ml.contamination }}" step="0.01" min="0.01" max="0.5">
+                                        <small class="form-text text-muted">Expected proportion of anomalies</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="auto_retrain"
+                                                   {% if config.ml.auto_retrain %}checked{% endif %}>
+                                            <label class="form-check-label">Automatic Retraining</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Model Parameters</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Isolation Forest Trees</label>
+                                        <input type="number" class="form-control" name="if_n_estimators" 
+                                               value="{{ config.ml.isolation_forest.n_estimators }}" min="10" max="1000">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">SVM Gamma</label>
+                                        <select class="form-select" name="svm_gamma">
+                                            <option value="scale" {% if config.ml.one_class_svm.gamma == 'scale' %}selected{% endif %}>Scale</option>
+                                            <option value="auto" {% if config.ml.one_class_svm.gamma == 'auto' %}selected{% endif %}>Auto</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Autoencoder Hidden Layers</label>
+                                        <input type="text" class="form-control" name="ae_hidden_layers" 
+                                               value="{{ config.ml.autoencoder.hidden_layers|join(',') }}"
+                                               placeholder="e.g., 128,64,32">
+                                        <small class="form-text text-muted">Comma-separated layer sizes</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Learning Rate</label>
+                                        <input type="number" class="form-control" name="learning_rate" 
+                                               value="{{ config.ml.autoencoder.learning_rate }}" step="0.0001" min="0.0001" max="0.1">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save ML Settings
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Alert Settings -->
+                    <div class="tab-pane fade" id="alerts" role="tabpanel">
+                        <form id="alert-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Alert Configuration</h5>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="email_alerts"
+                                                   {% if config.alerts.email_enabled %}checked{% endif %}>
+                                            <label class="form-check-label">Email Alerts</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Email Recipients</label>
+                                        <textarea class="form-control" name="email_recipients" rows="3"
+                                                  placeholder="admin@example.com, security@example.com">{{ config.alerts.email_recipients|join(', ') }}</textarea>
+                                        <small class="form-text text-muted">Comma-separated email addresses</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Minimum Severity for Alerts</label>
+                                        <select class="form-select" name="min_severity">
+                                            <option value="low" {% if config.alerts.min_severity == 'low' %}selected{% endif %}>Low</option>
+                                            <option value="medium" {% if config.alerts.min_severity == 'medium' %}selected{% endif %}>Medium</option>
+                                            <option value="high" {% if config.alerts.min_severity == 'high' %}selected{% endif %}>High</option>
+                                            <option value="critical" {% if config.alerts.min_severity == 'critical' %}selected{% endif %}>Critical</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Alert Rate Limit (per hour)</label>
+                                        <input type="number" class="form-control" name="rate_limit" 
+                                               value="{{ config.alerts.rate_limit }}" min="1" max="1000">
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Notification Settings</h5>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="webhook_enabled"
+                                                   {% if config.alerts.webhook_enabled %}checked{% endif %}>
+                                            <label class="form-check-label">Webhook Notifications</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Webhook URL</label>
+                                        <input type="url" class="form-control" name="webhook_url" 
+                                               value="{{ config.alerts.webhook_url }}"
+                                               placeholder="https://hooks.slack.com/...">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="false_positive_learning"
+                                                   {% if config.alerts.false_positive_learning %}checked{% endif %}>
+                                            <label class="form-check-label">Learn from False Positives</label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Alert Retention (days)</label>
+                                        <input type="number" class="form-control" name="retention_days" 
+                                               value="{{ config.alerts.retention_days }}" min="1" max="365">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Alert Settings
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- System Settings -->
+                    <div class="tab-pane fade" id="system" role="tabpanel">
+                        <form id="system-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Database</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Database Path</label>
+                                        <input type="text" class="form-control" name="db_path" 
+                                               value="{{ config.database.path }}" readonly>
+                                        <small class="form-text text-muted">SQLite database file location</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Data Retention (days)</label>
+                                        <input type="number" class="form-control" name="data_retention" 
+                                               value="{{ config.database.retention_days }}" min="1" max="365">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="auto_vacuum"
+                                                   {% if config.database.auto_vacuum %}checked{% endif %}>
+                                            <label class="form-check-label">Auto Vacuum</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h5>Logging</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Log Level</label>
+                                        <select class="form-select" name="log_level">
+                                            <option value="DEBUG" {% if config.logging.level == 'DEBUG' %}selected{% endif %}>Debug</option>
+                                            <option value="INFO" {% if config.logging.level == 'INFO' %}selected{% endif %}>Info</option>
+                                            <option value="WARNING" {% if config.logging.level == 'WARNING' %}selected{% endif %}>Warning</option>
+                                            <option value="ERROR" {% if config.logging.level == 'ERROR' %}selected{% endif %}>Error</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Log File Size (MB)</label>
+                                        <input type="number" class="form-control" name="log_max_size" 
+                                               value="{{ config.logging.max_file_size }}" min="1" max="100">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">Log File Count</label>
+                                        <input type="number" class="form-control" name="log_backup_count" 
+                                               value="{{ config.logging.backup_count }}" min="1" max="10">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <div class="row">
+                                <div class="col-12">
+                                    <h5>System Maintenance</h5>
+                                    
+                                    <div class="btn-group me-2">
+                                        <button type="button" class="btn btn-outline-warning" onclick="cleanDatabase()">
+                                            <i class="fas fa-broom"></i> Clean Database
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" onclick="backupDatabase()">
+                                            <i class="fas fa-save"></i> Backup Database
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success" onclick="exportConfig()">
+                                            <i class="fas fa-download"></i> Export Config
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-primary" onclick="restartService()">
+                                            <i class="fas fa-redo"></i> Restart Service
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger" onclick="resetSystem()">
+                                            <i class="fas fa-exclamation-triangle"></i> Reset System
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save System Settings
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Form submission handlers
+document.getElementById('network-settings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('network', this);
+});
+
+document.getElementById('detection-settings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('detection', this);
+});
+
+document.getElementById('ml-settings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('ml', this);
+});
+
+document.getElementById('alert-settings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('alerts', this);
+});
+
+document.getElementById('system-settings').addEventListener('submit', function(e) {
+    e.preventDefault();
+    saveSettings('system', this);
+});
+
+function saveSettings(category, form) {
+    const formData = new FormData(form);
+    const settings = Object.fromEntries(formData);
+    
+    // Handle special cases
+    if (category === 'network') {
+        // Convert interfaces checkbox array
+        const interfaces = formData.getAll('interfaces');
+        settings.interfaces = interfaces;
+    }
+    
+    if (category === 'alerts') {
+        // Convert email recipients to array
+        if (settings.email_recipients) {
+            settings.email_recipients = settings.email_recipients.split(',').map(email => email.trim());
+        }
+    }
+    
+    if (category === 'ml') {
+        // Convert hidden layers to array
+        if (settings.ae_hidden_layers) {
+            settings.ae_hidden_layers = settings.ae_hidden_layers.split(',').map(layer => parseInt(layer.trim()));
+        }
+    }
+    
+    fetch(`/api/settings/${category}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Settings saved successfully', 'success');
+        } else {
+            showAlert('Error saving settings: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Error saving settings', 'danger');
+    });
+}
+
+function cleanDatabase() {
+    if (confirm('Clean old database records? This will remove data older than the retention period.')) {
+        fetch('/api/maintenance/clean-database', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(`Database cleaned: ${data.removed_records} records removed`, 'success');
+            } else {
+                showAlert('Error cleaning database: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Error cleaning database', 'danger');
+        });
+    }
+}
+
+function backupDatabase() {
+    fetch('/api/maintenance/backup-database', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Database backup created successfully', 'success');
+            // Download backup file
+            if (data.backup_path) {
+                const a = document.createElement('a');
+                a.href = `/api/download-backup?path=${encodeURIComponent(data.backup_path)}`;
+                a.download = data.backup_filename;
+                a.click();
+            }
+        } else {
+            showAlert('Error creating backup: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Error creating backup', 'danger');
+    });
+}
+
+function exportConfig() {
+    window.open('/api/settings/export');
+}
+
+function restartService() {
+    if (confirm('Restart the network anomaly detection service? This will temporarily stop monitoring.')) {
+        fetch('/api/service/restart', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('Service restart initiated', 'success');
+            } else {
+                showAlert('Error restarting service: ' + (data.error || 'Unknown error'), 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Error restarting service', 'danger');
+        });
+    }
+}
+
+function resetSystem() {
+    if (confirm('Reset system to default settings? This will remove all configuration and data!')) {
+        if (confirm('Are you sure? This action cannot be undone!')) {
+            fetch('/api/maintenance/reset-system', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('System reset successfully', 'success');
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showAlert('Error resetting system: ' + (data.error || 'Unknown error'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showAlert('Error resetting system', 'danger');
+            });
+        }
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-hide success alerts after 3 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 3000);
+    }
+}
+
+// Initialize tooltips and form validation
+document.addEventListener('DOMContentLoaded', function() {
+    // Enable Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Range input live updates
+    document.querySelectorAll('input[type="range"]').forEach(range => {
+        range.addEventListener('input', function() {
+            this.nextElementSibling.value = this.value;
+        });
+    });
+});
+</script>
+{% endblock %}

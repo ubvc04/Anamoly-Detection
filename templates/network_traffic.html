@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block title %}Network Traffic - Network Anomaly Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-network-wired"></i> Network Traffic</h1>
+        <p class="text-muted">Real-time network traffic monitoring and analysis</p>
+    </div>
+</div>
+
+<!-- Traffic Statistics -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Total Packets</h5>
+                <h2 class="text-primary">{{ traffic_stats.get('total_packets', 0) }}</h2>
+                <small class="text-muted">Since last reset</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Active Flows</h5>
+                <h2 class="text-success">{{ traffic_stats.get('active_flows', 0) }}</h2>
+                <small class="text-muted">Currently active</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Data Volume</h5>
+                <h2 class="text-info">{{ traffic_stats.get('total_bytes', 0)|filesizeformat }}</h2>
+                <small class="text-muted">Total processed</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Controls -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Traffic Filters</h5>
+            </div>
+            <div class="card-body">
+                <form id="traffic-filter">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="protocol-filter" class="form-label">Protocol</label>
+                            <select class="form-select" id="protocol-filter" name="protocol">
+                                <option value="">All Protocols</option>
+                                <option value="TCP">TCP</option>
+                                <option value="UDP">UDP</option>
+                                <option value="ICMP">ICMP</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="port-filter" class="form-label">Port</label>
+                            <input type="number" class="form-control" id="port-filter" name="port" 
+                                   placeholder="Port number">
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="ip-filter" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="ip-filter" name="ip" 
+                                   placeholder="IP address">
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="time-range" class="form-label">Time Range</label>
+                            <select class="form-select" id="time-range" name="time_range">
+                                <option value="1h">Last Hour</option>
+                                <option value="6h">Last 6 Hours</option>
+                                <option value="24h">Last 24 Hours</option>
+                                <option value="7d">Last 7 Days</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Apply Filters
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearFilters()">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                            <button type="button" class="btn btn-success" onclick="exportData()">
+                                <i class="fas fa-download"></i> Export
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Traffic Visualization -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> Traffic Patterns</h5>
+            </div>
+            <div class="card-body">
+                <!-- Plotly chart will be inserted here -->
+                <div id="traffic-chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Protocol Distribution -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Protocol Distribution</h5>
+            </div>
+            <div class="card-body">
+                <div id="protocol-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar"></i> Top Destinations</h5>
+            </div>
+            <div class="card-body">
+                <div id="destinations-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Flows Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="fas fa-stream"></i> Recent Network Flows</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshTable()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="flows-table">
+                        <thead>
+                            <tr>
+                                <th>Start Time</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Protocol</th>
+                                <th>Duration</th>
+                                <th>Packets</th>
+                                <th>Bytes</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flows-tbody">
+                            {% for flow in recent_flows %}
+                            <tr>
+                                <td>{{ flow.start_time.strftime('%H:%M:%S') if flow.start_time else '' }}</td>
+                                <td>{{ flow.source_ip }}:{{ flow.source_port or '' }}</td>
+                                <td>{{ flow.dest_ip }}:{{ flow.dest_port or '' }}</td>
+                                <td>{{ flow.protocol }}</td>
+                                <td>{{ flow.duration|round(2) if flow.duration else '' }}s</td>
+                                <td>{{ flow.packet_count }}</td>
+                                <td>{{ flow.byte_count|filesizeformat if flow.byte_count else '' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if flow.is_completed else 'primary' }}">
+                                        {{ 'Complete' if flow.is_completed else 'Active' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="viewFlowDetails('{{ flow.id }}')">
+                                        <i class="fas fa-eye"></i> Details
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <nav aria-label="Flows pagination">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        <li class="page-item {{ 'disabled' if current_page <= 1 else '' }}">
+                            <a class="page-link" href="#" onclick="loadPage({{ current_page - 1 }})">Previous</a>
+                        </li>
+                        
+                        {% for page_num in range(max(1, current_page - 2), min(total_pages + 1, current_page + 3)) %}
+                        <li class="page-item {{ 'active' if page_num == current_page else '' }}">
+                            <a class="page-link" href="#" onclick="loadPage({{ page_num }})">{{ page_num }}</a>
+                        </li>
+                        {% endfor %}
+                        
+                        <li class="page-item {{ 'disabled' if current_page >= total_pages else '' }}">
+                            <a class="page-link" href="#" onclick="loadPage({{ current_page + 1 }})">Next</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Flow Details Modal -->
+<div class="modal fade" id="flowDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Flow Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="flow-details-content">
+                <!-- Flow details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Initialize charts
+document.addEventListener('DOMContentLoaded', function() {
+    loadTrafficChart();
+    loadProtocolChart();
+    loadDestinationsChart();
+});
+
+function loadTrafficChart() {
+    fetch('/api/traffic/timeline')
+        .then(response => response.json())
+        .then(data => {
+            const trace = {
+                x: data.timestamps,
+                y: data.packet_counts,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Packets/min',
+                line: {color: '#007bff'}
+            };
+            
+            const layout = {
+                title: 'Network Traffic Over Time',
+                xaxis: {title: 'Time'},
+                yaxis: {title: 'Packets per minute'},
+                margin: {t: 40, r: 20, b: 40, l: 60}
+            };
+            
+            Plotly.newPlot('traffic-chart', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading traffic chart:', error));
+}
+
+function loadProtocolChart() {
+    fetch('/api/traffic/protocols')
+        .then(response => response.json())
+        .then(data => {
+            const trace = {
+                labels: data.protocols,
+                values: data.counts,
+                type: 'pie',
+                hole: 0.4
+            };
+            
+            const layout = {
+                title: 'Protocol Distribution',
+                margin: {t: 40, r: 20, b: 20, l: 20}
+            };
+            
+            Plotly.newPlot('protocol-chart', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading protocol chart:', error));
+}
+
+function loadDestinationsChart() {
+    fetch('/api/traffic/destinations')
+        .then(response => response.json())
+        .then(data => {
+            const trace = {
+                x: data.destinations,
+                y: data.counts,
+                type: 'bar',
+                marker: {color: '#28a745'}
+            };
+            
+            const layout = {
+                title: 'Top Destination IPs',
+                xaxis: {title: 'Destination IP'},
+                yaxis: {title: 'Connection Count'},
+                margin: {t: 40, r: 20, b: 80, l: 60}
+            };
+            
+            Plotly.newPlot('destinations-chart', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading destinations chart:', error));
+}
+
+// Filter form handling
+document.getElementById('traffic-filter').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const params = new URLSearchParams(formData);
+    
+    // Reload page with filters
+    window.location.href = '{{ url_for("network_traffic") }}?' + params.toString();
+});
+
+function clearFilters() {
+    window.location.href = '{{ url_for("network_traffic") }}';
+}
+
+function refreshTable() {
+    location.reload();
+}
+
+function loadPage(pageNum) {
+    const url = new URL(window.location);
+    url.searchParams.set('page', pageNum);
+    window.location.href = url.toString();
+}
+
+function viewFlowDetails(flowId) {
+    fetch(`/api/flow/${flowId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading flow details: ' + data.error);
+                return;
+            }
+            
+            const content = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><th>Flow ID:</th><td>${data.id}</td></tr>
+                            <tr><th>Protocol:</th><td>${data.protocol}</td></tr>
+                            <tr><th>Start Time:</th><td>${data.start_time}</td></tr>
+                            <tr><th>Duration:</th><td>${data.duration}s</td></tr>
+                            <tr><th>Status:</th><td>${data.is_completed ? 'Complete' : 'Active'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Traffic Statistics</h6>
+                        <table class="table table-sm">
+                            <tr><th>Packets:</th><td>${data.packet_count}</td></tr>
+                            <tr><th>Bytes:</th><td>${data.byte_count}</td></tr>
+                            <tr><th>Avg Packet Size:</th><td>${data.avg_packet_size}B</td></tr>
+                            <tr><th>Rate:</th><td>${data.packet_rate} pkt/s</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Source</h6>
+                        <table class="table table-sm">
+                            <tr><th>IP:</th><td>${data.source_ip}</td></tr>
+                            <tr><th>Port:</th><td>${data.source_port || 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Destination</h6>
+                        <table class="table table-sm">
+                            <tr><th>IP:</th><td>${data.dest_ip}</td></tr>
+                            <tr><th>Port:</th><td>${data.dest_port || 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('flow-details-content').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('flowDetailsModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading flow details');
+        });
+}
+
+function exportData() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', 'csv');
+    window.open('{{ url_for("network_traffic") }}?' + params.toString());
+}
+
+// Auto-refresh every 60 seconds
+setInterval(function() {
+    refreshTable();
+    loadTrafficChart();
+}, 60000);
+</script>
+{% endblock %}

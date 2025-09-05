@@ -1,0 +1,557 @@
+{% extends "base.html" %}
+
+{% block title %}Anomalies - Network Anomaly Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-exclamation-triangle"></i> Anomaly Detection</h1>
+        <p class="text-muted">Detected network anomalies and security alerts</p>
+    </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <h5 class="text-danger">Critical</h5>
+                <h2 class="text-danger">{{ anomaly_stats.get('critical', 0) }}</h2>
+                <small class="text-muted">High severity alerts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <h5 class="text-warning">High</h5>
+                <h2 class="text-warning">{{ anomaly_stats.get('high', 0) }}</h2>
+                <small class="text-muted">High priority alerts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <h5 class="text-info">Medium</h5>
+                <h2 class="text-info">{{ anomaly_stats.get('medium', 0) }}</h2>
+                <small class="text-muted">Medium priority alerts</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card border-secondary">
+            <div class="card-body text-center">
+                <h5 class="text-secondary">Low</h5>
+                <h2 class="text-secondary">{{ anomaly_stats.get('low', 0) }}</h2>
+                <small class="text-muted">Low priority alerts</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter and Control Panel -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Filter Anomalies</h5>
+            </div>
+            <div class="card-body">
+                <form id="anomaly-filter">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <label for="severity-filter" class="form-label">Severity</label>
+                            <select class="form-select" id="severity-filter" name="severity">
+                                <option value="">All Severities</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="status-filter" class="form-label">Status</label>
+                            <select class="form-select" id="status-filter" name="status">
+                                <option value="">All Status</option>
+                                <option value="new">New</option>
+                                <option value="investigating">Investigating</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="false_positive">False Positive</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="ip-filter" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="ip-filter" name="ip" 
+                                   placeholder="Source or dest IP">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="time-range" class="form-label">Time Range</label>
+                            <select class="form-select" id="time-range" name="time_range">
+                                <option value="1h">Last Hour</option>
+                                <option value="6h">Last 6 Hours</option>
+                                <option value="24h">Last 24 Hours</option>
+                                <option value="7d">Last 7 Days</option>
+                                <option value="30d">Last 30 Days</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="score-threshold" class="form-label">Min Score</label>
+                            <input type="number" class="form-control" id="score-threshold" name="min_score" 
+                                   step="0.1" min="0" max="1" placeholder="0.5">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-search"></i> Filter
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="clearFilters()">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomaly Timeline Chart -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> Anomaly Timeline</h5>
+            </div>
+            <div class="card-body">
+                <div id="anomaly-timeline" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomalies Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="fas fa-list"></i> Detected Anomalies</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-success" onclick="bulkAction('resolve')">
+                        <i class="fas fa-check"></i> Bulk Resolve
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="bulkAction('false_positive')">
+                        <i class="fas fa-times"></i> Bulk False Positive
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportAnomalies()">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                                </th>
+                                <th>Time</th>
+                                <th>Severity</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Protocol</th>
+                                <th>Score</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for anomaly in anomalies %}
+                            <tr class="{% if anomaly.severity == 'critical' %}table-danger{% elif anomaly.severity == 'high' %}table-warning{% endif %}">
+                                <td>
+                                    <input type="checkbox" class="anomaly-checkbox" value="{{ anomaly.id }}">
+                                </td>
+                                <td>
+                                    <span data-bs-toggle="tooltip" title="{{ anomaly.timestamp }}">
+                                        {{ anomaly.timestamp.strftime('%m/%d %H:%M') if anomaly.timestamp else '' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'danger' if anomaly.severity == 'critical' else 'warning' if anomaly.severity == 'high' else 'info' if anomaly.severity == 'medium' else 'secondary' }}">
+                                        {{ anomaly.severity.title() }}
+                                    </span>
+                                </td>
+                                <td>{{ anomaly.source_ip }}{% if anomaly.source_port %}:{{ anomaly.source_port }}{% endif %}</td>
+                                <td>{{ anomaly.dest_ip }}{% if anomaly.dest_port %}:{{ anomaly.dest_port }}{% endif %}</td>
+                                <td>{{ anomaly.protocol }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'danger' if anomaly.anomaly_score > 0.8 else 'warning' if anomaly.anomaly_score > 0.6 else 'info' }}">
+                                        {{ (anomaly.anomaly_score * 100)|round(1) }}%
+                                    </span>
+                                </td>
+                                <td>
+                                    <span data-bs-toggle="tooltip" title="{{ anomaly.detection_reason }}">
+                                        {{ anomaly.detection_reason[:30] }}{% if anomaly.detection_reason|length > 30 %}...{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if anomaly.status == 'resolved' else 'secondary' if anomaly.status == 'false_positive' else 'primary' if anomaly.status == 'investigating' else 'danger' }}">
+                                        {{ anomaly.status.replace('_', ' ').title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="viewAnomalyDetails('{{ anomaly.id }}')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        
+                                        {% if anomaly.status == 'new' %}
+                                        <button class="btn btn-sm btn-outline-warning" 
+                                                onclick="updateStatus('{{ anomaly.id }}', 'investigating')">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                        {% endif %}
+                                        
+                                        {% if anomaly.status != 'resolved' %}
+                                        <button class="btn btn-sm btn-outline-success" 
+                                                onclick="updateStatus('{{ anomaly.id }}', 'resolved')">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% endif %}
+                                        
+                                        {% if anomaly.status != 'false_positive' %}
+                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                onclick="updateStatus('{{ anomaly.id }}', 'false_positive')">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                <nav aria-label="Anomalies pagination">
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if current_page > 1 %}
+                        <li class="page-item">
+                            <a class="page-link" href="javascript:void(0)" onclick="loadPage({{ current_page - 1 }})">Previous</a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for page_num in range(max(1, current_page - 2), min(total_pages + 1, current_page + 3)) %}
+                        <li class="page-item {{ 'active' if page_num == current_page else '' }}">
+                            <a class="page-link" href="javascript:void(0)" onclick="loadPage({{ page_num }})">{{ page_num }}</a>
+                        </li>
+                        {% endfor %}
+                        
+                        {% if current_page < total_pages %}
+                        <li class="page-item">
+                            <a class="page-link" href="javascript:void(0)" onclick="loadPage({{ current_page + 1 }})">Next</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Anomaly Details Modal -->
+<div class="modal fade" id="anomalyDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Anomaly Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="anomaly-details-content">
+                <!-- Anomaly details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Initialize charts and tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnomalyTimeline();
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+function loadAnomalyTimeline() {
+    fetch('/api/anomalies/timeline')
+        .then(response => response.json())
+        .then(data => {
+            const traces = [];
+            
+            if (data.critical && data.critical.length > 0) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.critical,
+                    name: 'Critical',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {color: '#dc3545'},
+                    fill: 'tonexty'
+                });
+            }
+            
+            if (data.high && data.high.length > 0) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.high,
+                    name: 'High',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {color: '#ffc107'},
+                    fill: 'tonexty'
+                });
+            }
+            
+            if (data.medium && data.medium.length > 0) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.medium,
+                    name: 'Medium',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {color: '#17a2b8'},
+                    fill: 'tonexty'
+                });
+            }
+            
+            if (data.low && data.low.length > 0) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.low,
+                    name: 'Low',
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    line: {color: '#6c757d'},
+                    fill: 'tonexty'
+                });
+            }
+            
+            const layout = {
+                title: 'Anomalies Over Time',
+                xaxis: {title: 'Time'},
+                yaxis: {title: 'Number of Anomalies'},
+                margin: {t: 40, r: 20, b: 40, l: 60},
+                hovermode: 'x unified'
+            };
+            
+            Plotly.newPlot('anomaly-timeline', traces, layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading anomaly timeline:', error));
+}
+
+// Filter form handling
+document.getElementById('anomaly-filter').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const params = new URLSearchParams(formData);
+    
+    // Remove empty values
+    for (let [key, value] of [...params]) {
+        if (!value) params.delete(key);
+    }
+    
+    // Reload page with filters
+    const url = new URL(window.location.origin + '/anomalies');
+    url.search = params.toString();
+    window.location.href = url.toString();
+});
+
+function clearFilters() {
+    window.location.href = '/anomalies';
+}
+
+function loadPage(pageNum) {
+    const url = new URL(window.location);
+    url.searchParams.set('page', pageNum);
+    window.location.href = url.toString();
+}
+
+function viewAnomalyDetails(anomalyId) {
+    fetch(`/api/anomaly/${anomalyId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading anomaly details: ' + data.error);
+                return;
+            }
+            
+            const content = generateAnomalyDetailsHTML(data);
+            document.getElementById('anomaly-details-content').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('anomalyDetailsModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading anomaly details');
+        });
+}
+
+function generateAnomalyDetailsHTML(data) {
+    return `
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Detection Information</h6>
+                <table class="table table-sm">
+                    <tr><th>ID:</th><td>${data.id}</td></tr>
+                    <tr><th>Timestamp:</th><td>${data.timestamp}</td></tr>
+                    <tr><th>Severity:</th><td>
+                        <span class="badge bg-${data.severity === 'critical' ? 'danger' : data.severity === 'high' ? 'warning' : data.severity === 'medium' ? 'info' : 'secondary'}">
+                            ${data.severity.charAt(0).toUpperCase() + data.severity.slice(1)}
+                        </span>
+                    </td></tr>
+                    <tr><th>Score:</th><td>${(data.anomaly_score * 100).toFixed(1)}%</td></tr>
+                    <tr><th>Status:</th><td>
+                        <span class="badge bg-${data.status === 'resolved' ? 'success' : data.status === 'false_positive' ? 'secondary' : 'primary'}">
+                            ${data.status.replace('_', ' ').charAt(0).toUpperCase() + data.status.replace('_', ' ').slice(1)}
+                        </span>
+                    </td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h6>Network Information</h6>
+                <table class="table table-sm">
+                    <tr><th>Protocol:</th><td>${data.protocol}</td></tr>
+                    <tr><th>Source:</th><td>${data.source_ip}${data.source_port ? ':' + data.source_port : ''}</td></tr>
+                    <tr><th>Destination:</th><td>${data.dest_ip}${data.dest_port ? ':' + data.dest_port : ''}</td></tr>
+                    <tr><th>Flow ID:</th><td>${data.flow_id || 'N/A'}</td></tr>
+                </table>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12">
+                <h6>Detection Reason</h6>
+                <div class="alert alert-info">
+                    ${data.detection_reason}
+                </div>
+            </div>
+        </div>
+        ${data.features ? `
+        <div class="row">
+            <div class="col-12">
+                <h6>Extracted Features</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        ${Object.entries(data.features).map(([key, value]) => 
+                            `<tr><th>${key}:</th><td>${value}</td></tr>`
+                        ).join('')}
+                    </table>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+    `;
+}
+
+function updateStatus(anomalyId, newStatus) {
+    if (confirm(`Mark this anomaly as ${newStatus.replace('_', ' ')}?`)) {
+        fetch(`/api/anomaly/${anomalyId}/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({status: newStatus})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error updating status: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error updating status');
+        });
+    }
+}
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.anomaly-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+}
+
+function bulkAction(action) {
+    const selectedIds = Array.from(document.querySelectorAll('.anomaly-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    if (selectedIds.length === 0) {
+        alert('Please select at least one anomaly');
+        return;
+    }
+    
+    if (confirm(`${action.replace('_', ' ').charAt(0).toUpperCase() + action.replace('_', ' ').slice(1)} ${selectedIds.length} selected anomalies?`)) {
+        fetch('/api/anomalies/bulk-action', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                anomaly_ids: selectedIds,
+                action: action
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Successfully updated ${data.updated_count} anomalies`);
+                location.reload();
+            } else {
+                alert('Error performing bulk action: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error performing bulk action');
+        });
+    }
+}
+
+function exportAnomalies() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', 'csv');
+    const url = new URL(window.location.origin + '/anomalies');
+    url.search = params.toString();
+    window.open(url.toString());
+}
+
+// Auto-refresh every 2 minutes
+setInterval(function() {
+    loadAnomalyTimeline();
+}, 120000);
+</script>
+{% endblock %}

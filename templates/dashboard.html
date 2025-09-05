@@ -1,0 +1,394 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Network Anomaly Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+        <p class="text-muted">Real-time network anomaly detection overview</p>
+    </div>
+</div>
+
+<!-- Status Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Packets Captured</h5>
+                        <h3 id="packets-count">{{ capture_stats.get('packets_captured', 0) }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-network-wired fa-2x"></i>
+                    </div>
+                </div>
+                <small>{{ capture_stats.get('packets_per_second', 0)|round(1) }} packets/sec</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Flows Analyzed</h5>
+                        <h3 id="flows-count">{{ capture_stats.get('flows_completed', 0) }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-stream fa-2x"></i>
+                    </div>
+                </div>
+                <small>{{ detection_stats.get('flows_per_second', 0)|round(1) }} flows/sec</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Anomalies Detected</h5>
+                        <h3 id="anomalies-count">{{ detection_stats.get('anomalies_detected', 0) }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+                <small>{{ detection_stats.alert_stats.get('recent_alerts_count', 0) }} in last hour</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">System Status</h5>
+                        <h3>
+                            {% if capture_stats.get('running') and detection_stats.get('running') %}
+                                <i class="fas fa-check-circle"></i>
+                            {% else %}
+                                <i class="fas fa-exclamation-circle"></i>
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-heartbeat fa-2x"></i>
+                    </div>
+                </div>
+                <small>
+                    {% if capture_stats.get('running') and detection_stats.get('running') %}
+                        All systems operational
+                    {% else %}
+                        Some systems offline
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Control Panel -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> System Control</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Packet Capture</h6>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-success" onclick="controlCapture('start')" 
+                                    {% if capture_stats.get('running') %}disabled{% endif %}>
+                                <i class="fas fa-play"></i> Start
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="controlCapture('stop')"
+                                    {% if not capture_stats.get('running') %}disabled{% endif %}>
+                                <i class="fas fa-stop"></i> Stop
+                            </button>
+                        </div>
+                        <span class="badge bg-{{ 'success' if capture_stats.get('running') else 'secondary' }} ms-2">
+                            {{ 'Running' if capture_stats.get('running') else 'Stopped' }}
+                        </span>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Anomaly Detection</h6>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-success" onclick="controlDetection('start')"
+                                    {% if detection_stats.get('running') %}disabled{% endif %}>
+                                <i class="fas fa-play"></i> Start
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="controlDetection('stop')"
+                                    {% if not detection_stats.get('running') %}disabled{% endif %}>
+                                <i class="fas fa-stop"></i> Stop
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="trainModel()">
+                                <i class="fas fa-brain"></i> Retrain Model
+                            </button>
+                        </div>
+                        <span class="badge bg-{{ 'success' if detection_stats.get('running') else 'secondary' }} ms-2">
+                            {{ 'Running' if detection_stats.get('running') else 'Stopped' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Alerts -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h5><i class="fas fa-bell"></i> Recent Alerts</h5>
+                <a href="{{ url_for('anomalies') }}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body">
+                {% if recent_alerts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Source</th>
+                                    <th>Destination</th>
+                                    <th>Protocol</th>
+                                    <th>Severity</th>
+                                    <th>Score</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alert in recent_alerts %}
+                                <tr>
+                                    <td>{{ alert.timestamp[:19] }}</td>
+                                    <td>{{ alert.source_ip }}</td>
+                                    <td>{{ alert.dest_ip }}:{{ alert.dest_port or '' }}</td>
+                                    <td>{{ alert.protocol }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if alert.severity == 'critical' else 'warning' if alert.severity == 'high' else 'info' if alert.severity == 'medium' else 'secondary' }}">
+                                            {{ alert.severity.title() }}
+                                        </span>
+                                    </td>
+                                    <td>{{ (alert.anomaly_score * 100)|round(1) }}%</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-secondary" 
+                                                onclick="markFalsePositive('{{ alert.id }}')">
+                                            <i class="fas fa-times"></i> False Positive
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted">
+                        <i class="fas fa-shield-alt fa-3x mb-3"></i>
+                        <p>No recent alerts. System is running normally.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Information -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-server"></i> System Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <strong>CPU Usage:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ system_metrics.get('cpu_percent', 0)|round(1) }}%
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Memory Usage:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ system_metrics.get('memory_percent', 0)|round(1) }}%
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Active Interfaces:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ capture_stats.get('active_interfaces', [])|length }}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Queue Size:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ detection_stats.get('queue_size', 0) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-brain"></i> ML Model Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Model Loaded:</strong>
+                    </div>
+                    <div class="col-6">
+                        <span class="badge bg-{{ 'success' if model_info.get('model_loaded') else 'danger' }}">
+                            {{ 'Yes' if model_info.get('model_loaded') else 'No' }}
+                        </span>
+                    </div>
+                </div>
+                {% if model_info.get('last_training_time') %}
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Last Training:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ model_info.last_training_time[:19] }}
+                    </div>
+                </div>
+                {% endif %}
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Available Models:</strong>
+                    </div>
+                    <div class="col-6">
+                        {{ model_info.get('available_models', 0) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh statistics every 30 seconds
+setInterval(function() {
+    fetch('/api/statistics')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('packets-count').textContent = data.capture.packets_captured || 0;
+            document.getElementById('flows-count').textContent = data.capture.flows_completed || 0;
+            document.getElementById('anomalies-count').textContent = data.detection.anomalies_detected || 0;
+        })
+        .catch(error => console.error('Error refreshing statistics:', error));
+}, 30000);
+
+function controlCapture(action) {
+    fetch('/api/control/capture', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({action: action})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error controlling capture');
+    });
+}
+
+function controlDetection(action) {
+    fetch('/api/control/detection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({action: action})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+        } else {
+            location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error controlling detection');
+    });
+}
+
+function trainModel() {
+    if (confirm('This will retrain the ML model. Continue?')) {
+        fetch('/api/train-model', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({force_retrain: true})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                alert('Model training started successfully');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error starting model training');
+        });
+    }
+}
+
+function markFalsePositive(alertId) {
+    if (confirm('Mark this alert as a false positive?')) {
+        fetch(`/api/alert/${alertId}/false-positive`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error marking false positive');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error marking false positive');
+        });
+    }
+}
+</script>
+{% endblock %}

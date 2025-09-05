@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+
+{% block title %}ML Models - Network Anomaly Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-brain"></i> Machine Learning Models</h1>
+        <p class="text-muted">Model management, training, and performance monitoring</p>
+    </div>
+</div>
+
+<!-- Model Status Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Isolation Forest</h5>
+                <h3 class="text-{{ 'success' if model_status.isolation_forest.loaded else 'danger' }}">
+                    <i class="fas fa-{{ 'check-circle' if model_status.isolation_forest.loaded else 'times-circle' }}"></i>
+                </h3>
+                <small class="text-muted">
+                    {{ 'Loaded' if model_status.isolation_forest.loaded else 'Not Loaded' }}
+                </small>
+                {% if model_status.isolation_forest.accuracy %}
+                <div class="mt-2">
+                    <span class="badge bg-info">{{ (model_status.isolation_forest.accuracy * 100)|round(1) }}% accuracy</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>One-Class SVM</h5>
+                <h3 class="text-{{ 'success' if model_status.one_class_svm.loaded else 'danger' }}">
+                    <i class="fas fa-{{ 'check-circle' if model_status.one_class_svm.loaded else 'times-circle' }}"></i>
+                </h3>
+                <small class="text-muted">
+                    {{ 'Loaded' if model_status.one_class_svm.loaded else 'Not Loaded' }}
+                </small>
+                {% if model_status.one_class_svm.accuracy %}
+                <div class="mt-2">
+                    <span class="badge bg-info">{{ (model_status.one_class_svm.accuracy * 100)|round(1) }}% accuracy</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Autoencoder</h5>
+                <h3 class="text-{{ 'success' if model_status.autoencoder.loaded else 'danger' }}">
+                    <i class="fas fa-{{ 'check-circle' if model_status.autoencoder.loaded else 'times-circle' }}"></i>
+                </h3>
+                <small class="text-muted">
+                    {{ 'Loaded' if model_status.autoencoder.loaded else 'Not Loaded' }}
+                </small>
+                {% if model_status.autoencoder.accuracy %}
+                <div class="mt-2">
+                    <span class="badge bg-info">{{ (model_status.autoencoder.accuracy * 100)|round(1) }}% accuracy</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Training Control Panel -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-cogs"></i> Model Training</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Training Status</h6>
+                        <div class="d-flex align-items-center mb-3">
+                            <span class="badge bg-{{ 'warning' if training_status.is_training else 'success' }} me-2">
+                                {{ 'Training' if training_status.is_training else 'Ready' }}
+                            </span>
+                            {% if training_status.is_training %}
+                            <div class="progress flex-grow-1">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     style="width: {{ training_status.progress }}%">
+                                    {{ training_status.progress }}%
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-success" onclick="startTraining()"
+                                    {% if training_status.is_training %}disabled{% endif %}>
+                                <i class="fas fa-play"></i> Start Training
+                            </button>
+                            <button type="button" class="btn btn-warning" onclick="retrainModels()"
+                                    {% if training_status.is_training %}disabled{% endif %}>
+                                <i class="fas fa-redo"></i> Retrain All
+                            </button>
+                            {% if training_status.is_training %}
+                            <button type="button" class="btn btn-danger" onclick="stopTraining()">
+                                <i class="fas fa-stop"></i> Stop Training
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Training Configuration</h6>
+                        <form id="training-config">
+                            <div class="row">
+                                <div class="col-6">
+                                    <label class="form-label">Batch Size</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           name="batch_size" value="{{ config.batch_size or 1000 }}">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Validation Split</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           name="validation_split" value="{{ config.validation_split or 0.2 }}" 
+                                           step="0.1" min="0.1" max="0.5">
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-6">
+                                    <label class="form-label">Contamination</label>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           name="contamination" value="{{ config.contamination or 0.1 }}" 
+                                           step="0.01" min="0.01" max="0.5">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Auto-retrain</label>
+                                    <select class="form-select form-select-sm" name="auto_retrain">
+                                        <option value="true" {% if config.auto_retrain %}selected{% endif %}>Enabled</option>
+                                        <option value="false" {% if not config.auto_retrain %}selected{% endif %}>Disabled</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm mt-2">
+                                <i class="fas fa-save"></i> Save Config
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Performance Metrics -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar"></i> Performance Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div id="performance-chart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Training History -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> Training History</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Model</th>
+                                <th>Samples</th>
+                                <th>Duration</th>
+                                <th>Accuracy</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for training in training_history %}
+                            <tr>
+                                <td>{{ training.timestamp.strftime('%m/%d %H:%M') if training.timestamp else '' }}</td>
+                                <td>{{ training.model_type }}</td>
+                                <td>{{ training.sample_count }}</td>
+                                <td>{{ training.duration|round(1) if training.duration else '' }}s</td>
+                                <td>
+                                    {% if training.accuracy %}
+                                    <span class="badge bg-{{ 'success' if training.accuracy > 0.8 else 'warning' if training.accuracy > 0.6 else 'danger' }}">
+                                        {{ (training.accuracy * 100)|round(1) }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if training.status == 'completed' else 'danger' if training.status == 'failed' else 'warning' }}">
+                                        {{ training.status.title() }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="viewTrainingDetails('{{ training.id }}')">
+                                        <i class="fas fa-eye"></i> Details
+                                    </button>
+                                    {% if training.status == 'completed' %}
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            onclick="loadModel('{{ training.id }}')">
+                                        <i class="fas fa-upload"></i> Load
+                                    </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-database"></i> Training Data</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Available Samples:</strong>
+                    <span class="badge bg-primary">{{ data_stats.total_samples }}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Normal Traffic:</strong>
+                    <span class="badge bg-success">{{ data_stats.normal_samples }}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Anomalous Traffic:</strong>
+                    <span class="badge bg-danger">{{ data_stats.anomaly_samples }}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Last Updated:</strong>
+                    <small class="text-muted">{{ data_stats.last_updated.strftime('%m/%d %H:%M') if data_stats.last_updated else 'Never' }}</small>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
+                        <i class="fas fa-sync"></i> Refresh Data
+                    </button>
+                    <button class="btn btn-outline-warning btn-sm" onclick="cleanData()">
+                        <i class="fas fa-broom"></i> Clean Old Data
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="exportTrainingData()">
+                        <i class="fas fa-download"></i> Export Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feature Importance -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> Feature Importance</h5>
+            </div>
+            <div class="card-body">
+                <div id="feature-importance-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Training Details Modal -->
+<div class="modal fade" id="trainingDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Training Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="training-details-content">
+                <!-- Training details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+// Initialize charts
+document.addEventListener('DOMContentLoaded', function() {
+    loadPerformanceChart();
+    loadFeatureImportanceChart();
+    
+    // Auto-refresh training status if training is active
+    {% if training_status.is_training %}
+    setInterval(refreshTrainingStatus, 5000);
+    {% endif %}
+});
+
+function loadPerformanceChart() {
+    fetch('/api/models/performance')
+        .then(response => response.json())
+        .then(data => {
+            const traces = [];
+            
+            if (data.isolation_forest) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.isolation_forest,
+                    name: 'Isolation Forest',
+                    type: 'scatter',
+                    mode: 'lines+markers'
+                });
+            }
+            
+            if (data.one_class_svm) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.one_class_svm,
+                    name: 'One-Class SVM',
+                    type: 'scatter',
+                    mode: 'lines+markers'
+                });
+            }
+            
+            if (data.autoencoder) {
+                traces.push({
+                    x: data.timestamps,
+                    y: data.autoencoder,
+                    name: 'Autoencoder',
+                    type: 'scatter',
+                    mode: 'lines+markers'
+                });
+            }
+            
+            const layout = {
+                title: 'Model Performance Over Time',
+                xaxis: {title: 'Training Session'},
+                yaxis: {title: 'Accuracy', range: [0, 1]},
+                margin: {t: 40, r: 20, b: 40, l: 60}
+            };
+            
+            Plotly.newPlot('performance-chart', traces, layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading performance chart:', error));
+}
+
+function loadFeatureImportanceChart() {
+    fetch('/api/models/feature-importance')
+        .then(response => response.json())
+        .then(data => {
+            const trace = {
+                x: data.importance_scores,
+                y: data.feature_names,
+                type: 'bar',
+                orientation: 'h',
+                marker: {color: '#007bff'}
+            };
+            
+            const layout = {
+                title: 'Feature Importance',
+                xaxis: {title: 'Importance Score'},
+                yaxis: {title: 'Features'},
+                margin: {t: 40, r: 20, b: 40, l: 200}
+            };
+            
+            Plotly.newPlot('feature-importance-chart', [trace], layout, {responsive: true});
+        })
+        .catch(error => console.error('Error loading feature importance chart:', error));
+}
+
+function startTraining() {
+    if (confirm('Start training new models? This may take several minutes.')) {
+        fetch('/api/models/train', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({action: 'start'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Training started successfully');
+                location.reload();
+            } else {
+                alert('Error starting training: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error starting training');
+        });
+    }
+}
+
+function retrainModels() {
+    if (confirm('Retrain all models? This will replace existing models.')) {
+        fetch('/api/models/train', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({action: 'retrain'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Retraining started successfully');
+                location.reload();
+            } else {
+                alert('Error starting retraining: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error starting retraining');
+        });
+    }
+}
+
+function stopTraining() {
+    if (confirm('Stop current training session?')) {
+        fetch('/api/models/train', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({action: 'stop'})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Training stopped successfully');
+                location.reload();
+            } else {
+                alert('Error stopping training: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error stopping training');
+        });
+    }
+}
+
+function refreshTrainingStatus() {
+    fetch('/api/models/training-status')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.is_training) {
+                location.reload();
+            } else {
+                // Update progress bar
+                const progressBar = document.querySelector('.progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = data.progress + '%';
+                    progressBar.textContent = data.progress + '%';
+                }
+            }
+        })
+        .catch(error => console.error('Error refreshing training status:', error));
+}
+
+// Training configuration form
+document.getElementById('training-config').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const config = Object.fromEntries(formData);
+    
+    fetch('/api/models/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Configuration saved successfully');
+        } else {
+            alert('Error saving configuration: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving configuration');
+    });
+});
+
+function viewTrainingDetails(trainingId) {
+    fetch(`/api/models/training/${trainingId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading training details: ' + data.error);
+                return;
+            }
+            
+            const content = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Training Information</h6>
+                        <table class="table table-sm">
+                            <tr><th>ID:</th><td>${data.id}</td></tr>
+                            <tr><th>Model Type:</th><td>${data.model_type}</td></tr>
+                            <tr><th>Start Time:</th><td>${data.start_time}</td></tr>
+                            <tr><th>Duration:</th><td>${data.duration}s</td></tr>
+                            <tr><th>Status:</th><td>${data.status}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Training Metrics</h6>
+                        <table class="table table-sm">
+                            <tr><th>Samples:</th><td>${data.sample_count}</td></tr>
+                            <tr><th>Accuracy:</th><td>${(data.accuracy * 100).toFixed(1)}%</td></tr>
+                            <tr><th>Precision:</th><td>${(data.precision * 100).toFixed(1)}%</td></tr>
+                            <tr><th>Recall:</th><td>${(data.recall * 100).toFixed(1)}%</td></tr>
+                            <tr><th>F1 Score:</th><td>${(data.f1_score * 100).toFixed(1)}%</td></tr>
+                        </table>
+                    </div>
+                </div>
+                ${data.error_message ? `
+                <div class="row">
+                    <div class="col-12">
+                        <h6>Error Message</h6>
+                        <div class="alert alert-danger">
+                            ${data.error_message}
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('training-details-content').innerHTML = content;
+            new bootstrap.Modal(document.getElementById('trainingDetailsModal')).show();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading training details');
+        });
+}
+
+function loadModel(trainingId) {
+    if (confirm('Load this trained model?')) {
+        fetch(`/api/models/load/${trainingId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Model loaded successfully');
+                location.reload();
+            } else {
+                alert('Error loading model: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading model');
+        });
+    }
+}
+
+function refreshData() {
+    fetch('/api/models/refresh-data', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Data refreshed successfully');
+            location.reload();
+        } else {
+            alert('Error refreshing data: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error refreshing data');
+    });
+}
+
+function cleanData() {
+    if (confirm('Clean old training data? This will remove data older than 30 days.')) {
+        fetch('/api/models/clean-data', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Cleaned ${data.removed_count} old records`);
+                location.reload();
+            } else {
+                alert('Error cleaning data: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error cleaning data');
+        });
+    }
+}
+
+function exportTrainingData() {
+    window.open('/api/models/export-data');
+}
+</script>
+{% endblock %}
