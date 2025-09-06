@@ -93,52 +93,15 @@
     </div>
 </div>
 
-<!-- Control Panel -->
+<!-- Protocol Statistics Section -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="fas fa-cogs"></i> System Control</h5>
+                <h5><i class="fas fa-chart-pie"></i> Network Activity Overview</h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Packet Capture</h6>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-success" onclick="controlCapture('start')" 
-                                    {% if capture_stats.get('running') %}disabled{% endif %}>
-                                <i class="fas fa-play"></i> Start
-                            </button>
-                            <button type="button" class="btn btn-danger" onclick="controlCapture('stop')"
-                                    {% if not capture_stats.get('running') %}disabled{% endif %}>
-                                <i class="fas fa-stop"></i> Stop
-                            </button>
-                        </div>
-                        <span class="badge bg-{{ 'success' if capture_stats.get('running') else 'secondary' }} ms-2">
-                            {{ 'Running' if capture_stats.get('running') else 'Stopped' }}
-                        </span>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h6>Anomaly Detection</h6>
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-success" onclick="controlDetection('start')"
-                                    {% if detection_stats.get('running') %}disabled{% endif %}>
-                                <i class="fas fa-play"></i> Start
-                            </button>
-                            <button type="button" class="btn btn-danger" onclick="controlDetection('stop')"
-                                    {% if not detection_stats.get('running') %}disabled{% endif %}>
-                                <i class="fas fa-stop"></i> Stop
-                            </button>
-                            <button type="button" class="btn btn-primary" onclick="trainModel()">
-                                <i class="fas fa-brain"></i> Retrain Model
-                            </button>
-                        </div>
-                        <span class="badge bg-{{ 'success' if detection_stats.get('running') else 'secondary' }} ms-2">
-                            {{ 'Running' if detection_stats.get('running') else 'Stopped' }}
-                        </span>
-                    </div>
-                </div>
+                <p class="text-muted">Real-time network protocol distribution and traffic analysis</p>
             </div>
         </div>
     </div>
@@ -451,7 +414,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h6>Core Protocols</h6>
                         <ul class="list-unstyled">
                             <li><span class="badge bg-primary me-2">TCP</span> <span id="tcp-packets">{{ protocol_stats.get('tcp', 0) }}</span> packets</li>
@@ -460,22 +423,30 @@
                             <li><span class="badge bg-warning me-2">ARP</span> <span id="arp-packets">{{ protocol_stats.get('arp', 0) }}</span> packets</li>
                         </ul>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <h6>Application Protocols</h6>
                         <ul class="list-unstyled">
                             <li><span class="badge bg-primary me-2">HTTP</span> <span id="http-packets">{{ protocol_stats.get('http', 0) }}</span> packets</li>
-                            <li><span class="badge bg-success me-2">DNS</span> <span id="dns-packets">{{ protocol_stats.get('dns', 0) }}</span> packets</li>
-                            <li><span class="badge bg-info me-2">SMTP</span> <span id="smtp-packets">{{ protocol_stats.get('smtp', 0) }}</span> packets</li>
-                            <li><span class="badge bg-warning me-2">FTP</span> <span id="ftp-packets">{{ protocol_stats.get('ftp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-success me-2">HTTPS</span> <span id="https-packets">{{ protocol_stats.get('https', 0) }}</span> packets</li>
+                            <li><span class="badge bg-info me-2">DNS</span> <span id="dns-packets">{{ protocol_stats.get('dns', 0) }}</span> packets</li>
+                            <li><span class="badge bg-warning me-2">SMTP</span> <span id="smtp-packets">{{ protocol_stats.get('smtp', 0) }}</span> packets</li>
                         </ul>
                     </div>
-                    <div class="col-md-4">
-                        <h6>Specialized Protocols</h6>
+                    <div class="col-md-3">
+                        <h6>Secure Protocols</h6>
                         <ul class="list-unstyled">
-                            <li><span class="badge bg-primary me-2">SSH</span> <span id="ssh-packets">{{ protocol_stats.get('ssh', 0) }}</span> packets</li>
-                            <li><span class="badge bg-success me-2">SNMP</span> <span id="snmp-packets">{{ protocol_stats.get('snmp', 0) }}</span> packets</li>
-                            <li><span class="badge bg-info me-2">SIP</span> <span id="sip-packets">{{ protocol_stats.get('sip', 0) }}</span> packets</li>
-                            <li><span class="badge bg-warning me-2">IoT/SCADA</span> <span id="iot-packets">{{ protocol_stats.get('iot_scada', 0) }}</span> packets</li>
+                            <li><span class="badge bg-success me-2">SSH</span> <span id="ssh-packets">{{ protocol_stats.get('ssh', 0) }}</span> packets</li>
+                            <li><span class="badge bg-primary me-2">FTP</span> <span id="ftp-packets">{{ protocol_stats.get('ftp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-info me-2">SNMP</span> <span id="snmp-packets">{{ protocol_stats.get('snmp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-warning me-2">SIP</span> <span id="sip-packets">{{ protocol_stats.get('sip', 0) }}</span> packets</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Other Protocols</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-secondary me-2">Other</span> <span id="other-packets">{{ protocol_stats.get('other', 0) }}</span> packets</li>
+                            <li><span class="badge bg-dark me-2">Unknown</span> <span id="unknown-packets">{{ protocol_stats.get('unknown', 0) }}</span> packets</li>
+                            <li><span class="badge bg-light text-dark me-2">Total</span> <span id="total-packets">{{ (protocol_stats.values() | sum) }}</span> packets</li>
                         </ul>
                     </div>
                 </div>

@@ -1,10 +1,10 @@
 {
-  "created_at": "2025-09-05T15:25:16.496209",
+  "created_at": "2025-09-06T12:15:33.182359",
   "model_type": "IsolationForest",
   "contamination": 0.1,
   "is_trained": false,
   "baseline_samples_collected": 0,
   "mode": "baseline_collection",
-  "reset_at": "2025-09-06T07:24:07.231696",
-  "last_updated": "2025-09-06T07:24:07.231696"
+  "reset_at": "2025-09-06T12:32:47.421943",
+  "last_updated": "2025-09-06T12:32:47.422953"
 }

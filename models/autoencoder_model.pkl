@@ -1,0 +1,1 @@
+# Placeholder for autoencoder model - will be created when training starts

@@ -484,7 +484,7 @@ class PacketCapture:
     
     def _extract_packet_info(self, packet, interface: str) -> Optional[PacketInfo]:
         """
-        Extract information from packet
+        Extract information from packet with comprehensive protocol detection
         
         Args:
             packet: Scapy packet object
@@ -507,17 +507,44 @@ class PacketCapture:
             window_size = None
             payload_size = 0
             
+            # Try to extract from different layers
+            try:
+                # Check for Ethernet layer first
+                if Ether in packet:
+                    ether = packet[Ether]
+                    # Check for ARP
+                    if packet.type == 0x0806:  # ARP
+                        from scapy.layers.l2 import ARP
+                        if ARP in packet:
+                            arp = packet[ARP]
+                            source_ip = arp.psrc
+                            dest_ip = arp.pdst
+                            protocol = "ARP"
+                            # Create the packet info and return early for ARP
+                            return self._create_packet_info(
+                                timestamp, source_ip, dest_ip, source_port,
+                                dest_port, protocol, len(packet), tcp_flags,
+                                interface, payload_size, ttl, window_size, 
+                                packet)
+            except Exception:
+                # If ARP parsing fails, continue with other protocols
+                pass
+            
             # Extract IP layer information
             if IP in packet:
                 ip_layer = packet[IP]
                 source_ip = ip_layer.src
                 dest_ip = ip_layer.dst
-                protocol = ip_layer.proto
                 ttl = ip_layer.ttl
                 
-                # Convert protocol number to name
-                protocol_names = {1: "ICMP", 6: "TCP", 17: "UDP"}
-                protocol = protocol_names.get(protocol, f"IP-{protocol}")
+                # More comprehensive protocol mapping
+                protocol_names = {
+                    1: "ICMP", 2: "IGMP", 6: "TCP", 17: "UDP", 41: "IPv6", 
+                    47: "GRE", 50: "ESP", 51: "AH", 58: "ICMPv6", 89: "OSPF", 
+                    132: "SCTP", 136: "UDPLite"
+                }
+                protocol_num = ip_layer.proto
+                protocol = protocol_names.get(protocol_num, f"IP-{protocol_num}")
                 
             elif IPv6 in packet:
                 ipv6_layer = packet[IPv6]
@@ -525,58 +552,200 @@ class PacketCapture:
                 dest_ip = ipv6_layer.dst
                 protocol = f"IPv6-{ipv6_layer.nh}"
             
-            # Extract transport layer information
+            # Extract transport layer information and identify application protocols
             if TCP in packet:
                 tcp_layer = packet[TCP]
                 source_port = tcp_layer.sport
                 dest_port = tcp_layer.dport
-                protocol = "TCP"
                 window_size = tcp_layer.window
+                
+                # Identify application protocol by well-known ports
+                protocol = self._identify_application_protocol("TCP", source_port, dest_port)
                 
                 # Extract TCP flags
                 flags = []
-                if tcp_layer.flags.F: flags.append("FIN")
-                if tcp_layer.flags.S: flags.append("SYN")
-                if tcp_layer.flags.R: flags.append("RST")
-                if tcp_layer.flags.P: flags.append("PSH")
-                if tcp_layer.flags.A: flags.append("ACK")
-                if tcp_layer.flags.U: flags.append("URG")
-                tcp_flags = ",".join(flags)
+                try:
+                    if hasattr(tcp_layer.flags, 'F') and tcp_layer.flags.F:
+                        flags.append("F")
+                    if hasattr(tcp_layer.flags, 'S') and tcp_layer.flags.S:
+                        flags.append("S")
+                    if hasattr(tcp_layer.flags, 'R') and tcp_layer.flags.R:
+                        flags.append("R")
+                    if hasattr(tcp_layer.flags, 'P') and tcp_layer.flags.P:
+                        flags.append("P")
+                    if hasattr(tcp_layer.flags, 'A') and tcp_layer.flags.A:
+                        flags.append("A")
+                    if hasattr(tcp_layer.flags, 'U') and tcp_layer.flags.U:
+                        flags.append("U")
+                except AttributeError:
+                    # Fallback for different Scapy versions
+                    try:
+                        if tcp_layer.flags is not None:
+                            flag_val = int(tcp_layer.flags)
+                            if flag_val & 0x01:
+                                flags.append("F")  # FIN
+                            if flag_val & 0x02:
+                                flags.append("S")  # SYN
+                            if flag_val & 0x04:
+                                flags.append("R")  # RST
+                            if flag_val & 0x08:
+                                flags.append("P")  # PSH
+                            if flag_val & 0x10:
+                                flags.append("A")  # ACK
+                            if flag_val & 0x20:
+                                flags.append("U")  # URG
+                    except (ValueError, TypeError):
+                        # Unable to parse flags, leave empty
+                        pass
+                
+                tcp_flags = "".join(flags) if flags else None
                 
                 # Calculate payload size
                 if Raw in packet:
                     payload_size = len(packet[Raw].load)
+                elif hasattr(tcp_layer, 'payload') and tcp_layer.payload:
+                    payload_size = len(bytes(tcp_layer.payload))
                     
             elif UDP in packet:
                 udp_layer = packet[UDP]
                 source_port = udp_layer.sport
                 dest_port = udp_layer.dport
-                protocol = "UDP"
                 
-                # Check for DNS
+                # Check for specific UDP protocols
                 if DNS in packet:
                     protocol = "DNS"
-                    
-                # Calculate payload size
-                payload_size = len(udp_layer.payload) if udp_layer.payload else 0
+                else:
+                    # Identify application protocol by well-known ports
+                    protocol = self._identify_application_protocol("UDP", source_port, dest_port)
                 
+                # Calculate payload size
+                if hasattr(udp_layer, 'payload') and udp_layer.payload:
+                    payload_size = len(bytes(udp_layer.payload))
+                    
             elif ICMP in packet:
                 protocol = "ICMP"
-                payload_size = len(packet[ICMP].payload) if packet[ICMP].payload else 0
+                icmp_layer = packet[ICMP]
+                if hasattr(icmp_layer, 'payload') and icmp_layer.payload:
+                    payload_size = len(bytes(icmp_layer.payload))
             
-            # Skip if no IP information
+            # Handle other protocols
+            else:
+                # Try to extract from other layer types
+                try:
+                    from scapy.layers.l2 import ARP
+                    if ARP in packet:
+                        arp = packet[ARP]
+                        source_ip = arp.psrc
+                        dest_ip = arp.pdst
+                        protocol = "ARP"
+                except Exception:
+                    pass
+            
+            # If still no IP information, try to extract from raw packet
             if not source_ip or not dest_ip:
+                # For non-IP packets, use MAC addresses or other identifiers
+                if Ether in packet:
+                    ether = packet[Ether]
+                    source_ip = ether.src
+                    dest_ip = ether.dst
+                    # Set default port values for non-IP packets
+                    if source_port is None:
+                        source_port = 0
+                    if dest_port is None:
+                        dest_port = 0
+                    if protocol == "Unknown":
+                        # Identify by EtherType
+                        ethertype_map = {
+                            0x0800: "IPv4", 0x86DD: "IPv6", 0x0806: "ARP",
+                            0x8035: "RARP", 0x809B: "AppleTalk", 0x8137: "IPX"
+                        }
+                        protocol = ethertype_map.get(
+                            ether.type, f"Ether-{hex(ether.type)}")
+                else:
+                    # If no Ethernet layer, return None to skip this packet
+                    return None
+
+            # Ensure we have valid source and destination information
+            if source_ip and dest_ip:
+                # Set default port values if still None
+                if source_port is None:
+                    source_port = 0
+                if dest_port is None:
+                    dest_port = 0
+
+                return self._create_packet_info(
+                    timestamp, source_ip, dest_ip, source_port, dest_port,
+                    protocol, len(packet), tcp_flags, interface,
+                    payload_size, ttl, window_size, packet)
+            else:
                 return None
             
+        except Exception as e:
+            logging.error(f"Error extracting packet info: {e}")
+            return None
+    
+    def _identify_application_protocol(self, transport_protocol: str,
+                                     source_port: int, dest_port: int) -> str:
+        """
+        Identify application protocol based on transport protocol and ports
+        
+        Args:
+            transport_protocol: TCP or UDP
+            source_port: Source port number
+            dest_port: Destination port number
+            
+        Returns:
+            Protocol name string
+        """
+        # Well-known port mappings
+        tcp_ports = {
+            20: "FTP-Data", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
+            53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS",
+            993: "IMAPS", 995: "POP3S", 587: "SMTP-SSL", 465: "SMTP-SSL",
+            3389: "RDP", 3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis",
+            27017: "MongoDB", 1433: "MSSQL", 5984: "CouchDB", 9042: "Cassandra"
+        }
+        
+        udp_ports = {
+            53: "DNS", 67: "DHCP-Server", 68: "DHCP-Client", 69: "TFTP",
+            123: "NTP", 161: "SNMP", 162: "SNMP-Trap", 514: "Syslog",
+            520: "RIP", 1812: "RADIUS", 1813: "RADIUS-Acct", 5060: "SIP"
+        }
+        
+        # Check destination port first (more likely to be service port)
+        if transport_protocol == "TCP":
+            if dest_port in tcp_ports:
+                return tcp_ports[dest_port]
+            elif source_port in tcp_ports:
+                return tcp_ports[source_port]
+            else:
+                return "TCP"
+        elif transport_protocol == "UDP":
+            if dest_port in udp_ports:
+                return udp_ports[dest_port]
+            elif source_port in udp_ports:
+                return udp_ports[source_port]
+            else:
+                return "UDP"
+        
+        return transport_protocol
+    
+    def _create_packet_info(self, timestamp, source_ip, dest_ip, source_port,
+                           dest_port, protocol, packet_size, tcp_flags,
+                           interface, payload_size, ttl, window_size, packet):
+        """
+        Create PacketInfo object with extracted information
+        """
+        try:
             # Create packet info
             packet_info = PacketInfo(
                 timestamp=timestamp,
-                source_ip=source_ip,
-                dest_ip=dest_ip,
+                source_ip=str(source_ip),
+                dest_ip=str(dest_ip),
                 source_port=source_port,
                 dest_port=dest_port,
                 protocol=protocol,
-                packet_size=len(packet),
+                packet_size=packet_size,
                 tcp_flags=tcp_flags,
                 interface=interface,
                 flow_id="",  # Will be set later
@@ -586,7 +755,7 @@ class PacketCapture:
                 raw_data={
                     'packet_summary': str(packet.summary()),
                     'layer_count': len(packet.layers()),
-                    'has_payload': Raw in packet
+                    'has_payload': Raw in packet if Raw else False
                 }
             )
             
@@ -596,7 +765,7 @@ class PacketCapture:
             return packet_info
             
         except Exception as e:
-            logging.error(f"Error extracting packet info: {e}")
+            logging.error(f"Error creating packet info: {e}")
             return None
     
     def _process_packets(self) -> None:

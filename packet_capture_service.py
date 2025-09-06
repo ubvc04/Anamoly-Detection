@@ -1,5 +1,5 @@
 """
-Enhanced Network Packet Capture Service
+Enhanced Network Packet Capture Service with Advanced Protocol Detection
 Real-time packet capture and analysis service for the Network Anomaly Detection system
 """
 
@@ -10,6 +10,14 @@ from datetime import datetime, timezone
 from queue import Queue, Empty
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass
+
+# Import our enhanced analyzer
+try:
+    from enhanced_packet_analyzer import get_enhanced_analyzer, EnhancedPacketInfo
+    HAS_ENHANCED_ANALYZER = True
+except ImportError as e:
+    logging.warning(f"Enhanced analyzer not available: {e}")
+    HAS_ENHANCED_ANALYZER = False
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -122,20 +130,6 @@ class AnomalyDetector:
                 'is_anomaly': False
             }
 
-@dataclass
-class CapturedPacket:
-    """Data structure for captured network packets."""
-    timestamp: str
-    src_ip: str
-    dst_ip: str
-    src_port: int
-    dst_port: int
-    protocol: str
-    length: int
-    flags: Optional[str] = None
-    packet_type: Optional[str] = None
-    raw_features: Optional[Dict] = None
-
 class PacketCaptureService:
     """Service for capturing and processing network packets in real-time."""
     
@@ -163,7 +157,113 @@ class PacketCaptureService:
             self.callbacks.remove(callback)
     
     def _process_packet(self, packet):
-        """Process a single captured packet."""
+        """Process a single captured packet using direct protocol detection."""
+        try:
+            # Use direct protocol detector for reliable results
+            try:
+                from direct_protocol_detector import get_protocol_info
+                protocol_info = get_protocol_info(packet)
+                
+                # Create packet data with detected protocols
+                packet_data = CapturedPacket(
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    src_ip="Unknown",
+                    dst_ip="Unknown",
+                    src_port=protocol_info.src_port,
+                    dst_port=protocol_info.dst_port,
+                    protocol=protocol_info.application_protocol,
+                    length=len(packet),
+                    packet_type=protocol_info.transport_protocol,
+                    anomaly_score=0.0,
+                    anomaly_details=[]
+                )
+                
+                # Extract IP information if available
+                from scapy.all import IP, ARP
+                if packet.haslayer(IP):
+                    ip = packet[IP]
+                    packet_data.src_ip = ip.src
+                    packet_data.dst_ip = ip.dst
+                elif packet.haslayer(ARP):
+                    arp = packet[ARP]
+                    packet_data.src_ip = arp.psrc
+                    packet_data.dst_ip = arp.pdst
+                
+                # Store additional protocol info
+                packet_data.raw_features = {
+                    'transport_protocol': protocol_info.transport_protocol,
+                    'payload_size': protocol_info.payload_size,
+                    'detection_method': 'direct_detector'
+                }
+                
+            except ImportError:
+                # Fallback to basic analysis if direct detector fails
+                packet_data = self._basic_packet_analysis(packet)
+            
+            # Apply enhanced analysis if available
+            if HAS_ENHANCED_ANALYZER:
+                try:
+                    analyzer = get_enhanced_analyzer(enable_kitsune=False)
+                    enhanced_info = analyzer.analyze_packet(packet)
+                    
+                    # Update with enhanced analysis results
+                    if enhanced_info.application_protocol != "Unknown":
+                        packet_data.protocol = enhanced_info.application_protocol
+                    
+                    packet_data.anomaly_score = enhanced_info.anomaly_score
+                    packet_data.anomaly_details = enhanced_info.anomaly_reasons
+                    
+                    # Add enhanced features
+                    if packet_data.raw_features:
+                        packet_data.raw_features.update({
+                            'payload_entropy': enhanced_info.payload_entropy,
+                            'kitsune_score': enhanced_info.kitsune_score,
+                            'http_method': enhanced_info.http_method,
+                            'dns_query': enhanced_info.dns_query
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"Enhanced analysis failed: {e}")
+            
+            # Update statistics with proper protocol classification
+            self.stats['total_packets'] += 1
+            self.stats['last_packet_time'] = packet_data.timestamp
+            
+            protocol = packet_data.protocol
+            if protocol not in self.stats['packets_per_protocol']:
+                self.stats['packets_per_protocol'][protocol] = 0
+            self.stats['packets_per_protocol'][protocol] += 1
+            
+            # Count anomalies
+            if packet_data.anomaly_score > 0.5:
+                self.stats['anomalies_detected'] += 1
+            
+            # Add to queue for processing
+            try:
+                self.packet_queue.put_nowait(packet_data)
+            except Exception:
+                # Queue is full, skip this packet
+                pass
+            
+            # Notify callbacks
+            for callback in self.callbacks:
+                try:
+                    callback(packet_data)
+                except Exception as e:
+                    logger.error(f"Error in packet callback: {e}")
+            
+            # Store in database if available
+            if hasattr(self, 'db_manager') and self.db_manager:
+                try:
+                    self._store_packet_in_database(packet_data)
+                except Exception as e:
+                    logger.error(f"Error storing packet in database: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error processing packet: {e}")
+    
+    def _basic_packet_analysis(self, packet):
+        """Fallback basic packet analysis when enhanced analyzer not available."""
         try:
             from scapy.all import IP, TCP, UDP, ICMP
             
@@ -175,7 +275,12 @@ class PacketCaptureService:
                 src_port=0,
                 dst_port=0,
                 protocol="Unknown",
-                length=len(packet)
+                length=len(packet),
+                flags=None,
+                packet_type=None,
+                raw_features=None,
+                anomaly_score=0.0,
+                anomaly_details=None
             )
             
             # Extract IP layer information
@@ -187,14 +292,14 @@ class PacketCaptureService:
                 # Extract protocol-specific information
                 if packet.haslayer(TCP):
                     tcp_layer = packet[TCP]
-                    packet_data.protocol = "TCP"
+                    packet_data.protocol = self._determine_app_protocol_from_port(tcp_layer.dport, "TCP")
                     packet_data.src_port = tcp_layer.sport
                     packet_data.dst_port = tcp_layer.dport
                     packet_data.flags = str(tcp_layer.flags)
                     
                 elif packet.haslayer(UDP):
                     udp_layer = packet[UDP]
-                    packet_data.protocol = "UDP"
+                    packet_data.protocol = self._determine_app_protocol_from_port(udp_layer.dport, "UDP")
                     packet_data.src_port = udp_layer.sport
                     packet_data.dst_port = udp_layer.dport
                     
@@ -203,38 +308,81 @@ class PacketCaptureService:
                     packet_data.protocol = "ICMP"
                     packet_data.packet_type = f"Type_{icmp_layer.type}"
             
-            # Update statistics
-            self.stats['total_packets'] += 1
-            self.stats['last_packet_time'] = packet_data.timestamp
+            return packet_data
             
-            protocol = packet_data.protocol
-            if protocol not in self.stats['packets_per_protocol']:
-                self.stats['packets_per_protocol'][protocol] = 0
-            self.stats['packets_per_protocol'][protocol] += 1
-            
-            # Add to queue for processing
-            try:
-                self.packet_queue.put_nowait(packet_data)
-            except:
-                # Queue is full, skip this packet
-                pass
-            
-            # Notify callbacks
-            for callback in self.callbacks:
-                try:
-                    callback(packet_data)
-                except Exception as e:
-                    logger.error(f"Error in packet callback: {e}")
-            
-            # Process with ML model if available
-            if self.ml_model_manager:
-                try:
-                    self._analyze_packet_with_ml(packet_data)
-                except Exception as e:
-                    logger.error(f"Error analyzing packet with ML: {e}")
-                    
         except Exception as e:
-            logger.error(f"Error processing packet: {e}")
+            logger.error(f"Error in basic packet analysis: {e}")
+            return CapturedPacket(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                src_ip="Unknown",
+                dst_ip="Unknown",
+                src_port=0,
+                dst_port=0,
+                protocol="Error",
+                length=0,
+                flags=None,
+                packet_type=None,
+                raw_features=None,
+                anomaly_score=0.0,
+                anomaly_details=None
+            )
+    
+    def _determine_app_protocol_from_port(self, port, transport_protocol):
+        """Determine application protocol from port number."""
+        port_map = {
+            20: "FTP-Data", 21: "FTP", 22: "SSH", 23: "Telnet",
+            25: "SMTP", 53: "DNS", 67: "DHCP", 68: "DHCP",
+            80: "HTTP", 110: "POP3", 143: "IMAP", 161: "SNMP",
+            443: "HTTPS", 993: "IMAPS", 995: "POP3S",
+            3389: "RDP", 5060: "SIP", 8080: "HTTP-Alt"
+        }
+        
+        if port in port_map:
+            return port_map[port]
+        else:
+            return transport_protocol
+    
+    def _store_packet_in_database(self, packet_data):
+        """Store packet data in the database."""
+        try:
+            if hasattr(self, 'db_manager') and self.db_manager:
+                # Store packet information
+                self.db_manager.store_packet({
+                    'timestamp': packet_data.timestamp,
+                    'src_ip': packet_data.src_ip,
+                    'dst_ip': packet_data.dst_ip,
+                    'src_port': packet_data.src_port,
+                    'dst_port': packet_data.dst_port,
+                    'protocol': packet_data.protocol,
+                    'length': packet_data.length,
+                    'flags': packet_data.flags or '',
+                    'anomaly_score': packet_data.anomaly_score
+                })
+                
+                # Store anomaly if detected
+                if packet_data.anomaly_score > 0.5 and packet_data.anomaly_details:
+                    self.db_manager.store_anomaly({
+                        'timestamp': packet_data.timestamp,
+                        'src_ip': packet_data.src_ip,
+                        'dst_ip': packet_data.dst_ip,
+                        'protocol': packet_data.protocol,
+                        'anomaly_score': packet_data.anomaly_score,
+                        'model_name': 'packet_analyzer',
+                        'severity': 'high' if packet_data.anomaly_score > 0.8 else 'medium',
+                        'description': '; '.join(packet_data.anomaly_details),
+                        'details': {
+                            'src_ip': packet_data.src_ip,
+                            'dst_ip': packet_data.dst_ip,
+                            'protocol': packet_data.protocol,
+                            'score': packet_data.anomaly_score
+                        }
+                    })
+        except Exception as e:
+            logger.error(f"Error storing packet in database: {e}")
+    
+    def set_database_manager(self, db_manager):
+        """Set the database manager for storing packets."""
+        self.db_manager = db_manager
     
     def _analyze_packet_with_ml(self, packet_data: CapturedPacket):
         """Analyze packet with the ML model for anomaly detection."""

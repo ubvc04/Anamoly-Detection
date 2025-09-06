@@ -12,7 +12,7 @@
 
 <!-- Model Status Cards -->
 <div class="row mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
                 <h5>Isolation Forest</h5>
@@ -31,7 +31,7 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
                 <h5>One-Class SVM</h5>
@@ -50,7 +50,26 @@
         </div>
     </div>
     
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Local Outlier Factor</h5>
+                <h3 class="text-{{ 'success' if model_status.local_outlier_factor.loaded else 'danger' }}">
+                    <i class="fas fa-{{ 'check-circle' if model_status.local_outlier_factor.loaded else 'times-circle' }}"></i>
+                </h3>
+                <small class="text-muted">
+                    {{ 'Loaded' if model_status.local_outlier_factor.loaded else 'Not Loaded' }}
+                </small>
+                {% if model_status.local_outlier_factor.accuracy %}
+                <div class="mt-2">
+                    <span class="badge bg-info">{{ (model_status.local_outlier_factor.accuracy * 100)|round(1) }}% accuracy</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
         <div class="card">
             <div class="card-body text-center">
                 <h5>Autoencoder</h5>

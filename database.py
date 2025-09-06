@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import (Boolean, Column, DateTime, Float, Integer, String,
-                        Text, create_engine)
+                        Text, create_engine, func)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -585,6 +585,132 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error getting statistics: {e}")
             return {}
+    
+    def get_protocol_packet_count(self, protocol: str) -> int:
+        """
+        Get packet count for a specific protocol
+        
+        Args:
+            protocol: Protocol name (case-insensitive)
+            
+        Returns:
+            Number of packets for the protocol
+        """
+        try:
+            with self.get_session() as session:
+                # For recent activity (last 24 hours), case-insensitive search
+                cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+                count = session.query(NetworkPacket).filter(
+                    NetworkPacket.timestamp >= cutoff_24h,
+                    NetworkPacket.protocol.ilike(f'%{protocol}%')
+                ).count()
+                return count
+                
+        except Exception as e:
+            logging.error(f"Error getting protocol count for {protocol}: {e}")
+            return 0
+    
+    def get_protocol_distribution(self) -> Dict[str, int]:
+        """
+        Get distribution of protocols in recent packets
+        
+        Returns:
+            Dictionary with protocol names and counts
+        """
+        try:
+            with self.get_session() as session:
+                # Get protocol distribution for last 24 hours
+                cutoff_24h = datetime.utcnow() - timedelta(hours=24)
+                
+                # Query for protocol counts
+                protocol_counts = session.query(
+                    NetworkPacket.protocol,
+                    func.count(NetworkPacket.id).label('count')
+                ).filter(
+                    NetworkPacket.timestamp >= cutoff_24h
+                ).group_by(NetworkPacket.protocol).all()
+                
+                # Convert to dictionary
+                distribution = {}
+                for protocol, count in protocol_counts:
+                    # Clean up protocol names
+                    clean_protocol = protocol.upper() if protocol else 'UNKNOWN'
+                    distribution[clean_protocol] = count
+                
+                return distribution
+                
+        except Exception as e:
+            logging.error(f"Error getting protocol distribution: {e}")
+            return {}
+    
+    def store_packet(self, packet_data: Dict[str, Any]) -> bool:
+        """
+        Store a captured packet in the database
+        
+        Args:
+            packet_data: Dictionary containing packet information
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                packet = NetworkPacket(
+                    timestamp=datetime.fromisoformat(packet_data['timestamp'].replace('Z', '+00:00')) if isinstance(packet_data['timestamp'], str) else packet_data['timestamp'],
+                    source_ip=packet_data.get('src_ip', 'Unknown'),
+                    dest_ip=packet_data.get('dst_ip', 'Unknown'),
+                    source_port=packet_data.get('src_port', 0),
+                    dest_port=packet_data.get('dst_port', 0),
+                    protocol=packet_data.get('protocol', 'Unknown'),
+                    packet_size=packet_data.get('length', packet_data.get('packet_size', 0)),
+                    tcp_flags=packet_data.get('flags', ''),
+                    raw_data=json.dumps({
+                        'anomaly_score': packet_data.get('anomaly_score', 0.0),
+                        'packet_type': packet_data.get('packet_type', ''),
+                        'raw_features': packet_data.get('raw_features', {})
+                    })
+                )
+                
+                session.add(packet)
+                session.commit()
+                return True
+                
+        except Exception as e:
+            logging.error(f"Error storing packet: {e}")
+            return False
+    
+    def store_anomaly(self, anomaly_data: Dict[str, Any]) -> bool:
+        """
+        Store an anomaly detection result in the database
+        
+        Args:
+            anomaly_data: Dictionary containing anomaly information
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_session() as session:
+                anomaly = AnomalyDetection(
+                    timestamp=datetime.fromisoformat(anomaly_data['timestamp'].replace('Z', '+00:00')) if isinstance(anomaly_data['timestamp'], str) else anomaly_data['timestamp'],
+                    source_ip=anomaly_data.get('source_ip', anomaly_data.get('src_ip', 'Unknown')),
+                    dest_ip=anomaly_data.get('dest_ip', anomaly_data.get('dst_ip', 'Unknown')),
+                    protocol=anomaly_data.get('protocol', 'Unknown'),
+                    anomaly_score=anomaly_data.get('anomaly_score', 0.0),
+                    severity=anomaly_data.get('severity', 'medium'),
+                    description=anomaly_data.get('description', 'Anomaly detected'),
+                    model_name=anomaly_data.get('model_name', 'packet_analyzer'),
+                    is_anomaly=True,
+                    features=json.dumps(anomaly_data.get('details', {}))
+                )
+                
+                session.add(anomaly)
+                session.commit()
+                return True
+                
+        except Exception as e:
+            logging.error(f"Error storing anomaly: {e}")
+            return False
     
     def _flow_to_dict(self, flow: NetworkFlow) -> Dict[str, Any]:
         """Convert NetworkFlow object to dictionary"""

@@ -461,16 +461,65 @@
                 return;
             }
             
+            // Define protocol categories and colors
+            const protocolCategories = {
+                'Core Protocols': ['TCP', 'UDP', 'ICMP', 'ARP'],
+                'Application Protocols': ['HTTP', 'HTTPS', 'DNS', 'SMTP'],
+                'Secure Protocols': ['SSH', 'FTP', 'SNMP', 'SIP'],
+                'Other': ['Other', 'Unknown']
+            };
+            
+            const protocolColors = {
+                'TCP': '#007bff', 'UDP': '#28a745', 'ICMP': '#ffc107', 'ARP': '#17a2b8',
+                'HTTP': '#fd7e14', 'HTTPS': '#20c997', 'DNS': '#6f42c1', 'SMTP': '#e83e8c',
+                'SSH': '#198754', 'FTP': '#0d6efd', 'SNMP': '#dc3545', 'SIP': '#6610f2',
+                'Other': '#6c757d', 'Unknown': '#adb5bd'
+            };
+            
+            const totalPackets = Object.values(protocols).reduce((a, b) => a + b, 0);
             let html = '';
-            for (const [protocol, count] of Object.entries(protocols)) {
-                const percentage = Math.round((count / Object.values(protocols).reduce((a, b) => a + b, 0)) * 100);
-                html += `
-                    <div class="d-flex justify-content-between mb-1">
-                        <span class="protocol-${protocol.toLowerCase()}">${protocol}</span>
-                        <span>${count} (${percentage}%)</span>
-                    </div>
-                `;
+            
+            // Group protocols by category
+            for (const [category, protoList] of Object.entries(protocolCategories)) {
+                const categoryProtocols = protoList.filter(p => protocols[p.toLowerCase()] > 0);
+                if (categoryProtocols.length > 0) {
+                    html += `<div class="mb-3"><h6 class="text-muted">${category}</h6>`;
+                    
+                    for (const protocol of categoryProtocols) {
+                        const count = protocols[protocol.toLowerCase()] || 0;
+                        if (count > 0) {
+                            const percentage = Math.round((count / totalPackets) * 100);
+                            const color = protocolColors[protocol] || '#6c757d';
+                            html += `
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div>
+                                        <span class="badge" style="background-color: ${color};">${protocol}</span>
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold">${count}</span>
+                                        <small class="text-muted">(${percentage}%)</small>
+                                    </div>
+                                </div>
+                                <div class="progress mb-2" style="height: 4px;">
+                                    <div class="progress-bar" style="width: ${percentage}%; background-color: ${color};"></div>
+                                </div>
+                            `;
+                        }
+                    }
+                    html += '</div>';
+                }
             }
+            
+            // Add total
+            html += `
+                <div class="border-top pt-2 mt-2">
+                    <div class="d-flex justify-content-between">
+                        <span class="fw-bold">Total Packets:</span>
+                        <span class="fw-bold">${totalPackets}</span>
+                    </div>
+                </div>
+            `;
+            
             container.innerHTML = html;
         }
         
