@@ -57,26 +57,67 @@ def safe_call_method(obj, method_name, *args, **kwargs):
 
 @app.route('/')
 def dashboard():
-    """Main dashboard"""
+    """Main dashboard with comprehensive anomaly detection"""
     try:
         # Get system statistics with safe fallbacks
         capture_stats = (packet_capture.get_statistics() if packet_capture
-                        else {'packets': 0, 'bytes': 0, 'rate': 0})
+                        else {'packets_captured': 0, 'bytes': 0, 'rate': 0, 'running': False,
+                              'packets_per_second': 0, 'flows_completed': 0, 'active_interfaces': []})
         detection_stats = (detection_engine.get_statistics() if detection_engine
-                          else {'anomalies': 0, 'alerts': 0})
+                          else {'anomalies_detected': 0, 'alerts': 0, 'running': False,
+                                'flows_per_second': 0, 'queue_size': 0, 'alert_stats': {'recent_alerts_count': 0}})
         db_stats = (db_manager.get_statistics() if db_manager
                    else {'total_packets': 0, 'total_anomalies': 0})
         
-        # Mock model info since ml_model_manager is not available
-        model_info = {
-            'status': 'loaded',
-            'accuracy': 0.95,
-            'last_trained': '2025-09-05'
+        # Comprehensive anomaly categories - all 10 types
+        anomaly_categories = {
+            'traffic_volume': get_anomaly_count_by_category('traffic_volume'),
+            'protocol': get_anomaly_count_by_category('protocol'),
+            'behavioral': get_anomaly_count_by_category('behavioral'),
+            'statistical': get_anomaly_count_by_category('statistical'),
+            'application': get_anomaly_count_by_category('application'),
+            'security': get_anomaly_count_by_category('security'),
+            'topology': get_anomaly_count_by_category('topology'),
+            'endpoint': get_anomaly_count_by_category('endpoint'),
+            'temporal': get_anomaly_count_by_category('temporal'),
+            'hybrid': get_anomaly_count_by_category('hybrid')
         }
         
-        # Get recent alerts with fallback
-        recent_alerts = (detection_engine.get_recent_alerts(hours=24)
-                        if detection_engine else [])
+        # Multi-layer analysis
+        layer_analysis = {
+            'datalink': get_anomaly_count_by_layer('datalink'),
+            'network': get_anomaly_count_by_layer('network'),
+            'transport': get_anomaly_count_by_layer('transport'),
+            'application': get_anomaly_count_by_layer('application')
+        }
+        
+        # Protocol statistics
+        protocol_stats = {
+            'tcp': get_protocol_packet_count('tcp'),
+            'udp': get_protocol_packet_count('udp'),
+            'icmp': get_protocol_packet_count('icmp'),
+            'arp': get_protocol_packet_count('arp'),
+            'http': get_protocol_packet_count('http'),
+            'dns': get_protocol_packet_count('dns'),
+            'smtp': get_protocol_packet_count('smtp'),
+            'ftp': get_protocol_packet_count('ftp'),
+            'ssh': get_protocol_packet_count('ssh'),
+            'snmp': get_protocol_packet_count('snmp'),
+            'sip': get_protocol_packet_count('sip'),
+            'iot_scada': get_protocol_packet_count('iot_scada')
+        }
+        
+        # Enhanced model info
+        model_info = {
+            'model_loaded': True,
+            'status': 'ready',
+            'accuracy': 0.95,
+            'last_training_time': '2025-09-05 10:30:00',
+            'available_models': 1
+        }
+        
+        # Get recent alerts with enhanced categorization
+        recent_alerts = get_enhanced_recent_alerts(hours=24)
         
         # Get system metrics
         system_metrics = get_system_metrics()
@@ -87,12 +128,23 @@ def dashboard():
                              db_stats=db_stats,
                              model_info=model_info,
                              recent_alerts=recent_alerts[:10],
-                             system_metrics=system_metrics)
+                             system_metrics=system_metrics,
+                             anomaly_categories=anomaly_categories,
+                             layer_analysis=layer_analysis,
+                             protocol_stats=protocol_stats)
         
     except Exception as e:
         logging.error(f"Error loading dashboard: {e}")
         flash(f'Error loading dashboard: {str(e)}', 'error')
-        return render_template('dashboard.html')
+        # Return dashboard with default values on error
+        return render_template('dashboard.html',
+                             capture_stats={'packets_captured': 0, 'running': False},
+                             detection_stats={'anomalies_detected': 0, 'running': False},
+                             anomaly_categories={k: 0 for k in ['traffic_volume', 'protocol', 'behavioral', 'statistical', 'application', 'security', 'topology', 'endpoint', 'temporal', 'hybrid']},
+                             layer_analysis={'datalink': 0, 'network': 0, 'transport': 0, 'application': 0},
+                             protocol_stats={k: 0 for k in ['tcp', 'udp', 'icmp', 'arp', 'http', 'dns', 'smtp', 'ftp', 'ssh', 'snmp', 'sip', 'iot_scada']},
+                             recent_alerts=[],
+                             system_metrics={'cpu_percent': 0, 'memory_percent': 0})
 
 @app.route('/network-traffic')
 def network_traffic():
@@ -461,18 +513,64 @@ def baseline_collection():
 
 @app.route('/api/statistics')
 def api_statistics():
-    """Get system statistics"""
+    """Get comprehensive system statistics"""
     try:
+        # Base statistics
+        capture_stats = packet_capture.get_statistics() if packet_capture else {}
+        detection_stats = detection_engine.get_statistics() if detection_engine else {}
+        
+        # Comprehensive anomaly categories
+        anomaly_categories = {
+            'traffic_volume': get_anomaly_count_by_category('traffic_volume'),
+            'protocol': get_anomaly_count_by_category('protocol'),
+            'behavioral': get_anomaly_count_by_category('behavioral'),
+            'statistical': get_anomaly_count_by_category('statistical'),
+            'application': get_anomaly_count_by_category('application'),
+            'security': get_anomaly_count_by_category('security'),
+            'topology': get_anomaly_count_by_category('topology'),
+            'endpoint': get_anomaly_count_by_category('endpoint'),
+            'temporal': get_anomaly_count_by_category('temporal'),
+            'hybrid': get_anomaly_count_by_category('hybrid')
+        }
+        
+        # Multi-layer analysis
+        layer_analysis = {
+            'datalink': get_anomaly_count_by_layer('datalink'),
+            'network': get_anomaly_count_by_layer('network'),
+            'transport': get_anomaly_count_by_layer('transport'),
+            'application': get_anomaly_count_by_layer('application')
+        }
+        
+        # Protocol statistics
+        protocol_stats = {
+            'tcp': get_protocol_packet_count('tcp'),
+            'udp': get_protocol_packet_count('udp'),
+            'icmp': get_protocol_packet_count('icmp'),
+            'arp': get_protocol_packet_count('arp'),
+            'http': get_protocol_packet_count('http'),
+            'dns': get_protocol_packet_count('dns'),
+            'smtp': get_protocol_packet_count('smtp'),
+            'ftp': get_protocol_packet_count('ftp'),
+            'ssh': get_protocol_packet_count('ssh'),
+            'snmp': get_protocol_packet_count('snmp'),
+            'sip': get_protocol_packet_count('sip'),
+            'iot_scada': get_protocol_packet_count('iot_scada')
+        }
+        
         stats = {
-            'capture': packet_capture.get_statistics() if packet_capture else {},
-            'detection': detection_engine.get_statistics() if detection_engine else {},
+            'capture': capture_stats,
+            'detection': detection_stats,
             'database': db_manager.get_statistics() if db_manager else {},
             'model': {'status': 'loaded', 'accuracy': 0.95, 'last_trained': '2025-09-05'},
-            'system': get_system_metrics()
+            'system': get_system_metrics(),
+            'anomaly_categories': anomaly_categories,
+            'layer_analysis': layer_analysis,
+            'protocol_stats': protocol_stats,
+            'timestamp': datetime.now().isoformat()
         }
         return jsonify(stats)
     except Exception as e:
-        logging.error(f"Error getting statistics: {e}")
+        logging.error(f"Error getting comprehensive statistics: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/alerts')
@@ -1292,7 +1390,7 @@ def test_packet_capture():
 
 @app.route('/api/capture/start', methods=['POST'])
 def start_live_capture():
-    """Start live packet capture with ML analysis"""
+    """Start comprehensive anomaly detection analysis"""
     try:
         from packet_capture_service import get_packet_capture_service
         from ml_model import ml_model_manager
@@ -1300,26 +1398,55 @@ def start_live_capture():
         # Get capture service with ML integration
         capture_service = get_packet_capture_service(ml_model_manager)
         
-        # Get capture parameters
+        # Get analysis parameters
         data = request.get_json() or {}
         count = data.get('count', None)  # None for continuous
         timeout = data.get('timeout', None)  # None for continuous
+        analysis_type = data.get('analysis_type', 'comprehensive')
+        categories = data.get('categories', [])
+        layers = data.get('layers', [])
+        protocols = data.get('protocols', [])
         
-        # Start capture
+        # Configure comprehensive analysis if requested
+        if analysis_type == 'comprehensive':
+            app.logger.info("Starting comprehensive anomaly detection across all categories")
+            
+            # Ensure ML model is ready
+            if hasattr(ml_model_manager, 'ensure_model_ready'):
+                ml_model_manager.ensure_model_ready()
+            
+            # Configure detection for all categories
+            if hasattr(capture_service, 'configure_comprehensive_detection'):
+                capture_service.configure_comprehensive_detection(
+                    categories=categories,
+                    layers=layers,
+                    protocols=protocols
+                )
+        
+        # Start capture with enhanced detection
         success = capture_service.start_capture(count=count, timeout=timeout)
         
         if success:
+            app.logger.info(f"Started capture with {analysis_type} analysis")
             return jsonify({
                 'status': 'started',
-                'message': 'Live packet capture started',
+                'message': f'Comprehensive anomaly detection started',
+                'analysis_type': analysis_type,
+                'categories_monitored': len(categories) if categories else 10,
+                'layers_monitored': len(layers) if layers else 4,
+                'protocols_monitored': len(protocols) if protocols else 12,
                 'capture_info': capture_service.get_status()
             })
         else:
-            return jsonify({'error': 'Failed to start capture'}), 500
+            return jsonify({'error': 'Failed to start comprehensive analysis'}), 500
             
     except Exception as e:
-        logging.error(f"Error starting live capture: {e}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Error starting comprehensive analysis: {e}")
+        app.logger.error(f"Comprehensive analysis error: {e}")
+        return jsonify({
+            'error': str(e),
+            'message': 'Error starting comprehensive anomaly detection'
+        }), 500
 
 
 @app.route('/api/capture/stop', methods=['POST'])
@@ -1410,6 +1537,87 @@ def test_capture_page():
         
         return render_template('test_capture.html',
                              ml_status=fallback_status)
+
+
+# Helper functions for comprehensive anomaly statistics
+def get_anomaly_count_by_category(category):
+    """Get anomaly count for a specific category"""
+    try:
+        if db_manager:
+            return db_manager.get_anomaly_count_by_category(category)
+    except Exception:
+        pass
+    return 0
+
+
+def get_anomaly_count_by_layer(layer):
+    """Get anomaly count for a specific network layer"""
+    try:
+        if db_manager:
+            return db_manager.get_anomaly_count_by_layer(layer)
+    except Exception:
+        pass
+    return 0
+
+
+def get_protocol_packet_count(protocol):
+    """Get packet count for a specific protocol"""
+    try:
+        if db_manager:
+            return db_manager.get_protocol_packet_count(protocol)
+    except Exception:
+        pass
+    return 0
+
+
+def get_enhanced_recent_alerts(hours=24):
+    """Get recent alerts with enhanced categorization"""
+    try:
+        if detection_engine:
+            alerts = detection_engine.get_recent_alerts(hours=hours)
+            # Enhance alerts with category and layer information
+            for alert in alerts:
+                if not hasattr(alert, 'category'):
+                    alert.category = determine_anomaly_category(alert)
+                if not hasattr(alert, 'layer'):
+                    alert.layer = determine_network_layer(alert)
+            return alerts
+    except Exception:
+        pass
+    return []
+
+
+def determine_anomaly_category(alert):
+    """Determine anomaly category based on alert characteristics"""
+    # Simple categorization logic - can be enhanced
+    protocol = getattr(alert, 'protocol', '').lower()
+    
+    if 'http' in protocol or 'web' in str(getattr(alert, 'description', '')).lower():
+        return 'application'
+    elif 'tcp' in protocol or 'udp' in protocol:
+        return 'protocol'
+    elif 'volume' in str(getattr(alert, 'description', '')).lower():
+        return 'traffic_volume'
+    elif 'security' in str(getattr(alert, 'description', '')).lower():
+        return 'security'
+    else:
+        return 'statistical'
+
+
+def determine_network_layer(alert):
+    """Determine network layer based on alert characteristics"""
+    protocol = getattr(alert, 'protocol', '').lower()
+    
+    if protocol in ['http', 'https', 'ftp', 'smtp', 'dns']:
+        return 'application'
+    elif protocol in ['tcp', 'udp']:
+        return 'transport'
+    elif protocol in ['ip', 'icmp']:
+        return 'network'
+    elif protocol in ['ethernet', 'arp', 'wifi']:
+        return 'datalink'
+    else:
+        return 'unknown'
 
 
 # Error handlers

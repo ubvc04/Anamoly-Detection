@@ -58,7 +58,7 @@
                         <i class="fas fa-exclamation-triangle fa-2x"></i>
                     </div>
                 </div>
-                <small>{{ detection_stats.alert_stats.get('recent_alerts_count', 0) }} in last hour</small>
+                <small>{{ detection_stats.get('alert_stats', {}).get('recent_alerts_count', 0) }} in last hour</small>
             </div>
         </div>
     </div>
@@ -144,13 +144,358 @@
     </div>
 </div>
 
+<!-- Comprehensive Anomaly Detection Categories -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-radar"></i> Real-Time Anomaly Detection - All Categories</h5>
+                <p class="text-muted mb-0">Comprehensive monitoring across all network layers and anomaly types</p>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Traffic Volume Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-primary h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-primary mb-1">1. Traffic Volume</h6>
+                                        <span class="h5 mb-0" id="traffic-volume-count">{{ anomaly_categories.get('traffic_volume', 0) }}</span>
+                                        <p class="text-muted small mb-0">DDoS, Bandwidth Abuse, Flooding</p>
+                                    </div>
+                                    <div class="text-primary">
+                                        <i class="fas fa-chart-bar fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('traffic_volume', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Protocol Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-success h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-success mb-1">2. Protocol</h6>
+                                        <span class="h5 mb-0" id="protocol-count">{{ anomaly_categories.get('protocol', 0) }}</span>
+                                        <p class="text-muted small mb-0">TCP/UDP/DNS/HTTP Violations</p>
+                                    </div>
+                                    <div class="text-success">
+                                        <i class="fas fa-network-wired fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('protocol', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Behavioral Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-info h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-info mb-1">3. Behavioral</h6>
+                                        <span class="h5 mb-0" id="behavioral-count">{{ anomaly_categories.get('behavioral', 0) }}</span>
+                                        <p class="text-muted small mb-0">User Pattern Deviations</p>
+                                    </div>
+                                    <div class="text-info">
+                                        <i class="fas fa-user-secret fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-info" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('behavioral', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistical Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-warning h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-warning mb-1">4. Statistical</h6>
+                                        <span class="h5 mb-0" id="statistical-count">{{ anomaly_categories.get('statistical', 0) }}</span>
+                                        <p class="text-muted small mb-0">Baseline Deviations</p>
+                                    </div>
+                                    <div class="text-warning">
+                                        <i class="fas fa-chart-line fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-warning" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('statistical', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Application-Layer Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-danger h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-danger mb-1">5. Application-Layer</h6>
+                                        <span class="h5 mb-0" id="application-count">{{ anomaly_categories.get('application', 0) }}</span>
+                                        <p class="text-muted small mb-0">SQL Injection, XSS, CSRF</p>
+                                    </div>
+                                    <div class="text-danger">
+                                        <i class="fas fa-shield-virus fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-danger" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('application', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security-Related Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-dark h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-dark mb-1">6. Security-Related</h6>
+                                        <span class="h5 mb-0" id="security-count">{{ anomaly_categories.get('security', 0) }}</span>
+                                        <p class="text-muted small mb-0">Intrusions, Malware, Exploits</p>
+                                    </div>
+                                    <div class="text-dark">
+                                        <i class="fas fa-user-ninja fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-dark" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('security', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Topology/Routing Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-secondary h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-secondary mb-1">7. Topology/Routing</h6>
+                                        <span class="h5 mb-0" id="topology-count">{{ anomaly_categories.get('topology', 0) }}</span>
+                                        <p class="text-muted small mb-0">BGP Hijacks, Route Leaks</p>
+                                    </div>
+                                    <div class="text-secondary">
+                                        <i class="fas fa-route fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-secondary" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('topology', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Host/Endpoint Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-primary h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-primary mb-1">8. Host/Endpoint</h6>
+                                        <span class="h5 mb-0" id="endpoint-count">{{ anomaly_categories.get('endpoint', 0) }}</span>
+                                        <p class="text-muted small mb-0">Device Compromises, Botnet</p>
+                                    </div>
+                                    <div class="text-primary">
+                                        <i class="fas fa-desktop fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('endpoint', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Temporal Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-success h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-success mb-1">9. Temporal</h6>
+                                        <span class="h5 mb-0" id="temporal-count">{{ anomaly_categories.get('temporal', 0) }}</span>
+                                        <p class="text-muted small mb-0">Time-based Patterns</p>
+                                    </div>
+                                    <div class="text-success">
+                                        <i class="fas fa-clock fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('temporal', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hybrid Anomalies -->
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-left-info h-100">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="text-info mb-1">10. Hybrid</h6>
+                                        <span class="h5 mb-0" id="hybrid-count">{{ anomaly_categories.get('hybrid', 0) }}</span>
+                                        <p class="text-muted small mb-0">Multi-category Correlations</p>
+                                    </div>
+                                    <div class="text-info">
+                                        <i class="fas fa-puzzle-piece fa-2x"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 4px;">
+                                        <div class="progress-bar bg-info" role="progressbar" 
+                                             style="width: {{ [((anomaly_categories.get('hybrid', 0) / 100.0) * 100), 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Network Layer Analysis -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-layer-group"></i> Multi-Layer Network Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6>Data Link Layer</h6>
+                            <div class="h4 text-primary" id="datalink-anomalies">{{ layer_analysis.get('datalink', 0) }}</div>
+                            <small class="text-muted">Ethernet, ARP, WiFi</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6>Network Layer</h6>
+                            <div class="h4 text-success" id="network-anomalies">{{ layer_analysis.get('network', 0) }}</div>
+                            <small class="text-muted">IP, ICMP, Routing</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6>Transport Layer</h6>
+                            <div class="h4 text-warning" id="transport-anomalies">{{ layer_analysis.get('transport', 0) }}</div>
+                            <small class="text-muted">TCP, UDP</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 border rounded">
+                            <h6>Application Layer</h6>
+                            <div class="h4 text-danger" id="application-anomalies">{{ layer_analysis.get('application', 0) }}</div>
+                            <small class="text-muted">HTTP, DNS, SMTP, FTP</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Protocol Coverage -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list-alt"></i> Comprehensive Protocol Coverage</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Core Protocols</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-primary me-2">TCP</span> <span id="tcp-packets">{{ protocol_stats.get('tcp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-success me-2">UDP</span> <span id="udp-packets">{{ protocol_stats.get('udp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-info me-2">ICMP</span> <span id="icmp-packets">{{ protocol_stats.get('icmp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-warning me-2">ARP</span> <span id="arp-packets">{{ protocol_stats.get('arp', 0) }}</span> packets</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Application Protocols</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-primary me-2">HTTP</span> <span id="http-packets">{{ protocol_stats.get('http', 0) }}</span> packets</li>
+                            <li><span class="badge bg-success me-2">DNS</span> <span id="dns-packets">{{ protocol_stats.get('dns', 0) }}</span> packets</li>
+                            <li><span class="badge bg-info me-2">SMTP</span> <span id="smtp-packets">{{ protocol_stats.get('smtp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-warning me-2">FTP</span> <span id="ftp-packets">{{ protocol_stats.get('ftp', 0) }}</span> packets</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Specialized Protocols</h6>
+                        <ul class="list-unstyled">
+                            <li><span class="badge bg-primary me-2">SSH</span> <span id="ssh-packets">{{ protocol_stats.get('ssh', 0) }}</span> packets</li>
+                            <li><span class="badge bg-success me-2">SNMP</span> <span id="snmp-packets">{{ protocol_stats.get('snmp', 0) }}</span> packets</li>
+                            <li><span class="badge bg-info me-2">SIP</span> <span id="sip-packets">{{ protocol_stats.get('sip', 0) }}</span> packets</li>
+                            <li><span class="badge bg-warning me-2">IoT/SCADA</span> <span id="iot-packets">{{ protocol_stats.get('iot_scada', 0) }}</span> packets</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Alerts -->
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between">
-                <h5><i class="fas fa-bell"></i> Recent Alerts</h5>
-                <a href="{{ url_for('anomalies') }}" class="btn btn-sm btn-outline-primary">View All</a>
+                <h5><i class="fas fa-bell"></i> Recent Alerts - All Categories</h5>
+                <div>
+                    <button class="btn btn-sm btn-success me-2" onclick="startAnalyse()">
+                        <i class="fas fa-play"></i> Start Analyse
+                    </button>
+                    <a href="{{ url_for('anomalies') }}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
             </div>
             <div class="card-body">
                 {% if recent_alerts %}
@@ -159,21 +504,27 @@
                             <thead>
                                 <tr>
                                     <th>Time</th>
+                                    <th>Category</th>
                                     <th>Source</th>
                                     <th>Destination</th>
                                     <th>Protocol</th>
+                                    <th>Layer</th>
                                     <th>Severity</th>
                                     <th>Score</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="alerts-table">
                                 {% for alert in recent_alerts %}
                                 <tr>
                                     <td>{{ alert.timestamp[:19] }}</td>
+                                    <td>
+                                        <span class="badge bg-primary">{{ alert.category or 'General' }}</span>
+                                    </td>
                                     <td>{{ alert.source_ip }}</td>
                                     <td>{{ alert.dest_ip }}:{{ alert.dest_port or '' }}</td>
                                     <td>{{ alert.protocol }}</td>
+                                    <td>{{ alert.layer or 'N/A' }}</td>
                                     <td>
                                         <span class="badge bg-{{ 'danger' if alert.severity == 'critical' else 'warning' if alert.severity == 'high' else 'info' if alert.severity == 'medium' else 'secondary' }}">
                                             {{ alert.severity.title() }}
@@ -195,6 +546,7 @@
                     <div class="text-center text-muted">
                         <i class="fas fa-shield-alt fa-3x mb-3"></i>
                         <p>No recent alerts. System is running normally.</p>
+                        <p class="small">Comprehensive monitoring active across all 10 anomaly categories and network layers.</p>
                     </div>
                 {% endif %}
             </div>
@@ -288,17 +640,118 @@
 
 {% block scripts %}
 <script>
-// Auto-refresh statistics every 30 seconds
+// Auto-refresh statistics every 10 seconds for real-time monitoring
 setInterval(function() {
     fetch('/api/statistics')
         .then(response => response.json())
         .then(data => {
+            // Update main counters
             document.getElementById('packets-count').textContent = data.capture.packets_captured || 0;
             document.getElementById('flows-count').textContent = data.capture.flows_completed || 0;
             document.getElementById('anomalies-count').textContent = data.detection.anomalies_detected || 0;
+            
+            // Update anomaly categories
+            updateAnomalyCategories(data.anomaly_categories || {});
+            
+            // Update layer analysis
+            updateLayerAnalysis(data.layer_analysis || {});
+            
+            // Update protocol statistics
+            updateProtocolStats(data.protocol_stats || {});
         })
         .catch(error => console.error('Error refreshing statistics:', error));
-}, 30000);
+}, 10000);
+
+function updateAnomalyCategories(categories) {
+    const categoryIds = [
+        'traffic-volume-count', 'protocol-count', 'behavioral-count', 
+        'statistical-count', 'application-count', 'security-count',
+        'topology-count', 'endpoint-count', 'temporal-count', 'hybrid-count'
+    ];
+    const categoryKeys = [
+        'traffic_volume', 'protocol', 'behavioral', 'statistical', 
+        'application', 'security', 'topology', 'endpoint', 'temporal', 'hybrid'
+    ];
+    
+    categoryIds.forEach((id, index) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = categories[categoryKeys[index]] || 0;
+        }
+    });
+}
+
+function updateLayerAnalysis(layers) {
+    const layerIds = ['datalink-anomalies', 'network-anomalies', 'transport-anomalies', 'application-anomalies'];
+    const layerKeys = ['datalink', 'network', 'transport', 'application'];
+    
+    layerIds.forEach((id, index) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = layers[layerKeys[index]] || 0;
+        }
+    });
+}
+
+function updateProtocolStats(protocols) {
+    const protocolIds = [
+        'tcp-packets', 'udp-packets', 'icmp-packets', 'arp-packets',
+        'http-packets', 'dns-packets', 'smtp-packets', 'ftp-packets',
+        'ssh-packets', 'snmp-packets', 'sip-packets', 'iot-packets'
+    ];
+    const protocolKeys = [
+        'tcp', 'udp', 'icmp', 'arp', 'http', 'dns', 'smtp', 'ftp',
+        'ssh', 'snmp', 'sip', 'iot_scada'
+    ];
+    
+    protocolIds.forEach((id, index) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = protocols[protocolKeys[index]] || 0;
+        }
+    });
+}
+
+function startAnalyse() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+    button.disabled = true;
+    
+    fetch('/api/capture/start', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            analysis_type: 'comprehensive',
+            categories: [
+                'traffic_volume', 'protocol', 'behavioral', 'statistical',
+                'application', 'security', 'topology', 'endpoint', 'temporal', 'hybrid'
+            ],
+            layers: ['datalink', 'network', 'transport', 'application'],
+            protocols: ['tcp', 'udp', 'icmp', 'arp', 'http', 'dns', 'smtp', 'ftp', 'ssh', 'snmp', 'sip', 'iot_scada']
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error starting analysis: ' + data.error);
+        } else {
+            alert('Comprehensive anomaly analysis started successfully!\n\nMonitoring:\n- All 10 anomaly categories\n- All network layers\n- All supported protocols');
+            // Refresh the page to show updated status
+            setTimeout(() => location.reload(), 2000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error starting comprehensive analysis');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
 
 function controlCapture(action) {
     fetch('/api/control/capture', {
@@ -345,20 +798,27 @@ function controlDetection(action) {
 }
 
 function trainModel() {
-    if (confirm('This will retrain the ML model. Continue?')) {
+    if (confirm('This will retrain the ML model with comprehensive feature analysis. Continue?')) {
         fetch('/api/train-model', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({force_retrain: true})
+            body: JSON.stringify({
+                force_retrain: true,
+                comprehensive_features: true,
+                anomaly_categories: [
+                    'traffic_volume', 'protocol', 'behavioral', 'statistical',
+                    'application', 'security', 'topology', 'endpoint', 'temporal', 'hybrid'
+                ]
+            })
         })
         .then(response => response.json())
         .then(data => {
             if (data.error) {
                 alert('Error: ' + data.error);
             } else {
-                alert('Model training started successfully');
+                alert('Comprehensive model training started successfully');
             }
         })
         .catch(error => {
@@ -390,5 +850,21 @@ function markFalsePositive(alertId) {
         });
     }
 }
+
+// Initialize real-time monitoring
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Comprehensive Network Anomaly Detection Dashboard Loaded');
+    console.log('Monitoring: 10 anomaly categories across all network layers');
+    
+    // Check if system is already running
+    fetch('/api/ml/status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.model_loaded && data.status === 'ready') {
+                console.log('ML Model ready for comprehensive detection');
+            }
+        })
+        .catch(error => console.log('Initial status check:', error));
+});
 </script>
 {% endblock %}

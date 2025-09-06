@@ -420,6 +420,8 @@ class MLModelManager:
     
     def __init__(self):
         self.detector = NetworkAnomalyDetector()
+        self.current_model = 'isolation_forest'  # Add missing attribute
+        self.model_type = 'IsolationForest'
         logging.info("MLModelManager initialized")
     
     def get_system_status(self) -> Dict[str, Any]:

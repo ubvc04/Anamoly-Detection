@@ -1,0 +1,104 @@
+# Network Anomaly Detection System Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# Application Settings
+app:
+  secret_key: "change-this-to-a-random-secret-key"
+  debug: false
+  host: "0.0.0.0"
+  port: 5000
+
+# Network Configuration
+network:
+  interface: "auto"  # Auto-detect or specify interface name (e.g., "eth0", "Wi-Fi")
+  promiscuous_mode: true
+  buffer_size: 65535
+  timeout: 1.0
+
+# Detection Parameters
+detection:
+  sensitivity: 0.1  # Lower = more sensitive (0.01 - 0.5)
+  baseline_duration: 1800  # 30 minutes in seconds
+  feature_window: 60  # Feature calculation window in seconds
+  alert_threshold: 0.8
+  min_baseline_samples: 1000
+  
+# Machine Learning Models
+ml_models:
+  isolation_forest:
+    contamination: 0.1
+    n_estimators: 100
+    max_samples: "auto"
+    max_features: 1.0
+    
+  one_class_svm:
+    nu: 0.1
+    kernel: "rbf"
+    gamma: "scale"
+    
+  autoencoder:
+    encoding_dim: 32
+    epochs: 100
+    batch_size: 32
+    validation_split: 0.2
+
+# Database Configuration
+database:
+  type: "sqlite"  # sqlite, postgresql, mysql
+  path: "data/anomaly_detection.db"
+  # For PostgreSQL/MySQL:
+  # host: "localhost"
+  # port: 5432
+  # username: "user"
+  # password: "password"
+  # database: "anomaly_detection"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file: "logs/app.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Data Retention
+data_retention:
+  raw_packets: 24  # hours
+  processed_features: 168  # hours (7 days)
+  anomaly_records: 720  # hours (30 days)
+  model_checkpoints: 5  # number of versions to keep
+
+# Alerting
+alerts:
+  enabled: true
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"
+    recipients: ["admin@example.com"]
+  
+  webhook:
+    enabled: false
+    url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    
+# Performance Tuning
+performance:
+  max_workers: 4  # Number of processing threads
+  packet_buffer_size: 10000
+  feature_cache_size: 1000
+  batch_processing: true
+  batch_size: 100
+
+# Security
+security:
+  require_auth: false  # Enable authentication
+  session_timeout: 3600  # seconds
+  max_login_attempts: 5
+  
+# Monitoring
+monitoring:
+  system_stats_interval: 30  # seconds
+  health_check_interval: 60  # seconds
+  metrics_retention: 24  # hours

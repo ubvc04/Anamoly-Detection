@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 """
-Real-time packet capture service for the Network Anomaly Detection system.
-This service captures live network traffic and feeds it to the ML model for analysis.
+Enhanced Network Packet Capture Service
+Real-time packet capture and analysis service for the Network Anomaly Detection system
 """
 
 import time
@@ -14,6 +13,114 @@ from dataclasses import dataclass
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+@dataclass
+class CapturedPacket:
+    """Data structure for captured network packets."""
+    timestamp: str
+    src_ip: str
+    dst_ip: str
+    src_port: int
+    dst_port: int
+    protocol: str
+    length: int
+    flags: Optional[str] = None
+    packet_type: Optional[str] = None
+    raw_features: Optional[Dict] = None
+    anomaly_score: float = 0.0
+    anomaly_details: Optional[List] = None
+
+class AnomalyDetector:
+    """Real-time anomaly detection for network packets"""
+    
+    def __init__(self, ml_model_manager=None):
+        self.ml_model_manager = ml_model_manager
+        self.baseline_stats = {
+            'packet_sizes': [],
+            'protocols': {},
+            'ports': {},
+            'ips': set()
+        }
+    
+    def analyze_packet(self, packet_data: CapturedPacket) -> Dict:
+        """Analyze packet for anomalies"""
+        anomalies = []
+        score = 0.0
+        
+        try:
+            # Basic rule-based detection
+            
+            # 1. Suspicious packet sizes
+            if packet_data.length > 1500:  # Larger than MTU
+                anomalies.append("Large packet size detected")
+                score += 0.3
+            elif packet_data.length < 64:  # Smaller than minimum
+                anomalies.append("Unusually small packet")
+                score += 0.2
+            
+            # 2. Suspicious ports
+            suspicious_ports = {1337, 31337, 12345, 54321, 9999, 6667, 6697}
+            if packet_data.dst_port in suspicious_ports:
+                anomalies.append(f"Connection to suspicious port: {packet_data.dst_port}")
+                score += 0.7
+            
+            # 3. Protocol anomalies
+            if packet_data.protocol == "ICMP" and packet_data.length > 1024:
+                anomalies.append("Large ICMP packet - potential attack")
+                score += 0.6
+            
+            # 4. TCP flag anomalies (if available)
+            if packet_data.flags:
+                suspicious_flags = ["SYN+FIN", "FIN+RST", "NULL", "XMAS"]
+                if packet_data.flags in suspicious_flags:
+                    anomalies.append(f"Suspicious TCP flags: {packet_data.flags}")
+                    score += 0.8
+            
+            # 5. High-frequency connections (simplified)
+            if hasattr(self, '_connection_count'):
+                connection_key = f"{packet_data.src_ip}:{packet_data.dst_ip}"
+                self._connection_count[connection_key] = self._connection_count.get(connection_key, 0) + 1
+                if self._connection_count[connection_key] > 100:  # Threshold
+                    anomalies.append("High frequency connection detected")
+                    score += 0.4
+            else:
+                self._connection_count = {}
+            
+            # 6. ML Model Analysis (if available)
+            if self.ml_model_manager and self.ml_model_manager.can_detect_anomalies():
+                try:
+                    # Create feature vector from packet data
+                    features = [
+                        packet_data.length,
+                        packet_data.src_port,
+                        packet_data.dst_port,
+                        1.0 if packet_data.protocol == "TCP" else 0.0,
+                        1.0 if packet_data.protocol == "UDP" else 0.0,
+                        1.0 if packet_data.protocol == "ICMP" else 0.0
+                    ]
+                    
+                    # Get ML prediction
+                    ml_result = self.ml_model_manager.predict_anomaly(features)
+                    if ml_result.get('is_anomaly', False):
+                        anomalies.append("ML model detected anomaly")
+                        score += ml_result.get('confidence', 0.5)
+                        
+                except Exception as e:
+                    logger.warning(f"ML analysis failed: {e}")
+            
+            return {
+                'anomalies': anomalies,
+                'score': min(score, 1.0),  # Cap at 1.0
+                'is_anomaly': score > 0.5
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing packet: {e}")
+            return {
+                'anomalies': [f"Analysis error: {str(e)}"],
+                'score': 0.0,
+                'is_anomaly': False
+            }
 
 @dataclass
 class CapturedPacket:
